@@ -34,6 +34,11 @@ or:
 | `-interval`           | 10s       | How often to report stats to stdout. |
 | `-method`             | GET       | Determines which HTTP method to use when making the request. |
 | `-metric-addr`        | `<none>`  | Address to use when serving the Prometheus `/metrics` endpoint. No metrics are served if unset. Format is `host:port` or `:port`. |
+| `-use-promethus`      | `true`    | Use Promethus as metrics server |
+| `-use-influxdb`       | `false`   | Use influxDB as metrics server, if this flag provided |
+| `-influx-username`    | `<unset>` | InfluxDB login user name |
+| `-influx-password`    | `<unset>` | InfluxDB login passsword |
+| `-influx-database`    | `metrics` | Define which database should use. please make sure target database is exists |
 | `-noLatencySummary`   | `<unset>` | If set, don't print the latency histogram report at the end. |
 | `-noreuse`            | `<unset>` | If set, do not reuse connections. Default is to reuse connections. |
 | `-reportLatenciesCSV` | `<none>`  | Filename to write CSV latency values. Format of CSV is millisecond buckets with number of requests in each bucket. |
