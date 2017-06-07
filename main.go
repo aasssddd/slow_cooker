@@ -33,7 +33,11 @@ import (
 )
 
 // DayInMs 1 day in milliseconds
-const DayInMs int64 = 24 * 60 * 60 * 1000000
+const (
+	DayInMs                 int64  = 24 * 60 * 60 * 1000000
+	ServerBackendPrometheus string = "prometheus"
+	ServerBackendInfluxDB   string = "influxdb"
+)
 
 // MeasuredResponse holds metadata about the response
 // we receive from the server under test.
@@ -229,8 +233,7 @@ func main() {
 	flag.Var(&headers, "header", "HTTP request header. (can be repeated.)")
 	data := flag.String("data", "", "HTTP request data")
 	metricAddr := flag.String("metric-addr", "", "address to serve metrics on")
-	usePromethus := flag.Bool("use-promethus", true, "use Promethus as metric server")
-	useInfluxDB := flag.Bool("use-influxdb", false, "use InfluxDB as metric server")
+	metricsServerBackend := flag.String("metric-server-backend", "", "value can be promethus or influxdb")
 	influxUsername := flag.String("influx-username", "", "influxdb username")
 	influxPassword := flag.String("influx-password", "", "influxdb password")
 	influxDatabase := flag.String("influx-database", "metrics", "influxdb database")
@@ -267,9 +270,6 @@ func main() {
 		exUsage("concurrency must be at least 1")
 	}
 
-	if *useInfluxDB {
-		*usePromethus = false
-	}
 	hosts := strings.Split(*host, ",")
 
 	requestData := loadData(*data)
@@ -334,12 +334,16 @@ func main() {
 	cleanup := make(chan bool, 2)
 	interrupted := make(chan os.Signal, 2)
 	signal.Notify(interrupted, syscall.SIGINT)
+
 	var met metrics.Metrics
-	if *usePromethus {
+
+	switch strings.ToLower(*metricsServerBackend) {
+	case ServerBackendPrometheus:
 		met = new(metrics.Prometheus).New()
-	} else if *useInfluxDB {
+	case ServerBackendInfluxDB:
 		met = new(metrics.Influx).New()
 	}
+
 	if *metricAddr != "" {
 		var opts metrics.ServerOpts
 		opts = metrics.ServerOpts{
