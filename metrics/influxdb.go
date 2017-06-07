@@ -16,17 +16,17 @@ type Influx struct {
 
 // New :
 func (influx Influx) New() Influx {
-	c := make(map[string]gomet.Counter)
-	h := make(map[string]gomet.Histogram)
-	c[Requests] = gomet.NewCounter()
-	gomet.Register(Requests, c[Requests])
-	c[Successes] = gomet.NewCounter()
-	gomet.Register(Successes, c[Successes])
-	s := gomet.NewExpDecaySample(1028, 0.015)
-	h[LatencyHistogram] = gomet.NewHistogram(s)
-	gomet.Register(LatencyHistogram, h[LatencyHistogram])
-	influx.Counter = c
-	influx.Histogram = h
+	counter := make(map[string]gomet.Counter)
+	histrogram := make(map[string]gomet.Histogram)
+	counter[Requests] = gomet.NewCounter()
+	gomet.Register(Requests, counter[Requests])
+	counter[Successes] = gomet.NewCounter()
+	gomet.Register(Successes, counter[Successes])
+	sample := gomet.NewExpDecaySample(1028, 0.015)
+	histrogram[LatencyHistogram] = gomet.NewHistogram(sample)
+	gomet.Register(LatencyHistogram, histrogram[LatencyHistogram])
+	influx.Counter = counter
+	influx.Histogram = histrogram
 	return influx
 }
 
