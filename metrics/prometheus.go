@@ -15,6 +15,11 @@ type Prometheus struct {
 	LatencyHistogram prometheus.Histogram
 }
 
+// SendMetricsNow : Implements Metrics interface
+func (p Prometheus) SendMetricsNow() {
+
+}
+
 // New :
 func (p Prometheus) New() Prometheus {
 	c := make(map[string]prometheus.Counter)
@@ -62,7 +67,6 @@ func (p Prometheus) Monitor(opts *ServerOpts) {
 // CounterInc : implement metrics
 func (p Prometheus) CounterInc(name string) {
 	p.Counter[name].Inc()
-
 }
 
 // HistogramObserve : implement metrics

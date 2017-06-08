@@ -3,14 +3,9 @@ package metrics
 import (
 	"fmt"
 	"sync"
-	"time"
 
 	gomet "github.com/rcrowley/go-metrics"
 	"github.com/vrischmann/go-metrics-influxdb"
-)
-
-const (
-	funcTimeout time.Duration = 1 * time.Second
 )
 
 // Influx :
@@ -19,6 +14,11 @@ type Influx struct {
 	Histogram                              map[string]gomet.Histogram
 	threadLock, counterLock, histogramLock *sync.Mutex
 	running                                *bool
+}
+
+// SendMetricsNow : implements Metrics interface
+func (influx Influx) SendMetricsNow() {
+	influxdb.SendMetricsNow()
 }
 
 // New :
@@ -46,14 +46,14 @@ func (influx Influx) Monitor(opts *ServerOpts) {
 		fmt.Println("monitor has already running")
 		return
 	}
-	*influx.running = true
 	influx.threadLock.Lock()
+	*influx.running = true
 	chRelease := make(chan bool, 1)
 
 	go func() {
 		influxdb.InfluxDB(
 			gomet.DefaultRegistry,
-			time.Second*1,
+			opts.WriteInterval,
 			opts.Host,
 			opts.Database,
 			opts.Username,
@@ -70,12 +70,12 @@ func (influx Influx) Monitor(opts *ServerOpts) {
 		for {
 			switch {
 			case <-chRelease:
-				influx.threadLock.Unlock()
 				*influx.running = false
 			default:
 			}
 		}
 	}(&influx)
+	influx.threadLock.Unlock()
 
 }
 

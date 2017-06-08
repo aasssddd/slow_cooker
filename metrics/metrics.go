@@ -1,5 +1,7 @@
 package metrics
 
+import "time"
+
 const (
 	// Requests : Counter
 	Requests string = "requests"
@@ -14,9 +16,11 @@ type Metrics interface {
 	Monitor(opts *ServerOpts)
 	CounterInc(name string)
 	HistogramObserve(name string, data float64)
+	SendMetricsNow()
 }
 
 // ServerOpts :
 type ServerOpts struct {
 	Host, Username, Password, Database string
+	WriteInterval                      time.Duration
 }

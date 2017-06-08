@@ -347,10 +347,11 @@ func main() {
 	if *metricAddr != "" {
 		var opts metrics.ServerOpts
 		opts = metrics.ServerOpts{
-			Host:     *metricAddr,
-			Username: *influxUsername,
-			Password: *influxPassword,
-			Database: *influxDatabase,
+			Host:          *metricAddr,
+			Username:      *influxUsername,
+			Password:      *influxPassword,
+			Database:      *influxDatabase,
+			WriteInterval: *interval,
 		}
 		met.Monitor(&opts)
 	}
@@ -365,6 +366,11 @@ func main() {
 			if !*noLatencySummary {
 				hdrreport.PrintLatencySummary(globalHist)
 			}
+
+			if *metricsServerBackend == ServerBackendInfluxDB {
+				met.SendMetricsNow()
+			}
+
 			if *reportLatenciesCSV != "" {
 				err := hdrreport.WriteReportCSV(reportLatenciesCSV, globalHist)
 				if err != nil {
