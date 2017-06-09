@@ -7,8 +7,8 @@ import (
 )
 
 func TestInfluxDB(t *testing.T) {
-	influx := new(Influx).New()
-	influx2 := new(Influx).New()
+	var influx Metrics = NewInflux()
+	var influx2 Metrics = NewInflux()
 
 	// make sure only one goroutine is running
 	opts := ServerOpts{
@@ -30,6 +30,6 @@ func TestInfluxDB(t *testing.T) {
 		influx2.HistogramObserve(LatencyHistogram, 1)
 	}
 	// default metrics will write every 10 Second, but we make it send immediately
-	influx2.SendMetricsNow()
+	influx2.Sync()
 
 }

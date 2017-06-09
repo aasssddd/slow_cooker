@@ -339,9 +339,9 @@ func main() {
 
 	switch strings.ToLower(*metricsServerBackend) {
 	case ServerBackendPrometheus:
-		met = new(metrics.Prometheus).New()
+		met = metrics.NewPrometheus()
 	case ServerBackendInfluxDB:
-		met = new(metrics.Influx).New()
+		met = metrics.NewInflux()
 	}
 
 	if *metricAddr != "" {
@@ -368,7 +368,7 @@ func main() {
 			}
 
 			if *metricsServerBackend == ServerBackendInfluxDB {
-				met.SendMetricsNow()
+				met.Sync()
 			}
 
 			if *reportLatenciesCSV != "" {

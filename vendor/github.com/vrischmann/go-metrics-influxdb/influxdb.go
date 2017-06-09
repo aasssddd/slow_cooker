@@ -26,8 +26,8 @@ type reporter struct {
 var sendNow = make(chan bool, 1)
 var endSending = make(chan bool, 1)
 
-// SendMetricsNow Sends metrics immediately
-func SendMetricsNow() {
+// Sync Sends metrics immediately
+func Sync() {
 	sendNow <- true
 	log.Println("send metrics now")
 	for {

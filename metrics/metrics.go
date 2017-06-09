@@ -16,7 +16,7 @@ type Metrics interface {
 	Monitor(opts *ServerOpts)
 	CounterInc(name string)
 	HistogramObserve(name string, data float64)
-	SendMetricsNow()
+	Sync()
 }
 
 // ServerOpts :

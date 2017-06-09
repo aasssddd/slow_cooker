@@ -13,16 +13,17 @@ type Influx struct {
 	Counter                                map[string]gomet.Counter
 	Histogram                              map[string]gomet.Histogram
 	threadLock, counterLock, histogramLock *sync.Mutex
-	running                                *bool
+	running                                bool
 }
 
-// SendMetricsNow : implements Metrics interface
-func (influx Influx) SendMetricsNow() {
-	influxdb.SendMetricsNow()
+// Sync : implements Metrics interface
+func (influx *Influx) Sync() {
+	influxdb.Sync()
 }
 
-// New :
-func (influx Influx) New() Influx {
+// NewInflux :
+func NewInflux() *Influx {
+	influx := Influx{}
 	influx.threadLock, influx.counterLock, influx.histogramLock = new(sync.Mutex), new(sync.Mutex), new(sync.Mutex)
 	counter := make(map[string]gomet.Counter)
 	histrogram := make(map[string]gomet.Histogram)
@@ -35,21 +36,19 @@ func (influx Influx) New() Influx {
 	gomet.Register(LatencyHistogram, histrogram[LatencyHistogram])
 	influx.Counter = counter
 	influx.Histogram = histrogram
-	status := false
-	influx.running = &status
-	return influx
+	influx.running = false
+	return &influx
 }
 
 // Monitor : implement Metrics
-func (influx Influx) Monitor(opts *ServerOpts) {
-	if *influx.running {
+func (influx *Influx) Monitor(opts *ServerOpts) {
+	if influx.running {
 		fmt.Println("monitor has already running")
 		return
 	}
 	influx.threadLock.Lock()
-	*influx.running = true
-	chRelease := make(chan bool, 1)
-
+	influx.running = true
+	influx.threadLock.Unlock()
 	go func() {
 		influxdb.InfluxDB(
 			gomet.DefaultRegistry,
@@ -62,32 +61,20 @@ func (influx Influx) Monitor(opts *ServerOpts) {
 		defer func() {
 			if r := recover(); r != nil {
 				fmt.Println("error execution monitor routine: ", r)
-				chRelease <- true
 			}
 		}()
 	}()
-	go func(influx *Influx) {
-		for {
-			switch {
-			case <-chRelease:
-				*influx.running = false
-			default:
-			}
-		}
-	}(&influx)
-	influx.threadLock.Unlock()
-
 }
 
 // CounterInc : implement Metrics
-func (influx Influx) CounterInc(name string) {
+func (influx *Influx) CounterInc(name string) {
 	influx.counterLock.Lock()
 	influx.Counter[name].Inc(1)
 	influx.counterLock.Unlock()
 }
 
 // HistogramObserve : implement Metric
-func (influx Influx) HistogramObserve(name string, data float64) {
+func (influx *Influx) HistogramObserve(name string, data float64) {
 	influx.histogramLock.Lock()
 	influx.Histogram[name].Update(int64(data))
 	influx.histogramLock.Unlock()

@@ -15,13 +15,14 @@ type Prometheus struct {
 	LatencyHistogram prometheus.Histogram
 }
 
-// SendMetricsNow : Implements Metrics interface
-func (p Prometheus) SendMetricsNow() {
+// Sync : Implements Metrics interface
+func (p Prometheus) Sync() {
 
 }
 
-// New :
-func (p Prometheus) New() Prometheus {
+// NewPrometheus :
+func NewPrometheus() *Prometheus {
+	prom := Prometheus{}
 	c := make(map[string]prometheus.Counter)
 	c[Requests] = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: Requests,
@@ -39,14 +40,14 @@ func (p Prometheus) New() Prometheus {
 		// TODO: make this tunable
 		Buckets: prometheus.ExponentialBuckets(0.5, 1.3, 50),
 	})
-	p.Counter = c
-	p.Histogram = h
-	p.registerMetrics()
+	prom.Counter = c
+	prom.Histogram = h
+	prom.registerMetrics()
 
-	return p
+	return &prom
 }
 
-func (p Prometheus) registerMetrics() {
+func (p *Prometheus) registerMetrics() {
 	for _, v := range p.Counter {
 		prometheus.MustRegister(v)
 	}
@@ -57,7 +58,7 @@ func (p Prometheus) registerMetrics() {
 }
 
 // Monitor : implement Metrics interface
-func (p Prometheus) Monitor(opts *ServerOpts) {
+func (p *Prometheus) Monitor(opts *ServerOpts) {
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())
 		http.ListenAndServe(opts.Host, nil)
@@ -65,11 +66,11 @@ func (p Prometheus) Monitor(opts *ServerOpts) {
 }
 
 // CounterInc : implement metrics
-func (p Prometheus) CounterInc(name string) {
+func (p *Prometheus) CounterInc(name string) {
 	p.Counter[name].Inc()
 }
 
 // HistogramObserve : implement metrics
-func (p Prometheus) HistogramObserve(name string, data float64) {
+func (p *Prometheus) HistogramObserve(name string, data float64) {
 	p.Histogram[name].Observe(data)
 }
