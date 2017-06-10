@@ -42,13 +42,14 @@ func NewInflux() *Influx {
 
 // Monitor : implement Metrics
 func (influx *Influx) Monitor(opts *ServerOpts) {
+	influx.threadLock.Lock()
 	if influx.running {
 		fmt.Println("monitor has already running")
 		return
 	}
-	influx.threadLock.Lock()
 	influx.running = true
 	influx.threadLock.Unlock()
+
 	go func() {
 		influxdb.InfluxDB(
 			gomet.DefaultRegistry,

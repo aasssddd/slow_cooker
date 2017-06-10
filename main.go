@@ -335,13 +335,13 @@ func main() {
 	interrupted := make(chan os.Signal, 2)
 	signal.Notify(interrupted, syscall.SIGINT)
 
-	var met metrics.Metrics
+	var metricsBackend metrics.Metrics
 
 	switch strings.ToLower(*metricsServerBackend) {
 	case ServerBackendPrometheus:
-		met = metrics.NewPrometheus()
+		metricsBackend = metrics.NewPrometheus()
 	case ServerBackendInfluxDB:
-		met = metrics.NewInflux()
+		metricsBackend = metrics.NewInflux()
 	}
 
 	if *metricAddr != "" {
@@ -353,7 +353,7 @@ func main() {
 			Database:      *influxDatabase,
 			WriteInterval: *interval,
 		}
-		met.Monitor(&opts)
+		metricsBackend.Monitor(&opts)
 	}
 
 	for {
@@ -367,9 +367,7 @@ func main() {
 				hdrreport.PrintLatencySummary(globalHist)
 			}
 
-			if *metricsServerBackend == ServerBackendInfluxDB {
-				met.Sync()
-			}
+			metricsBackend.Sync()
 
 			if *reportLatenciesCSV != "" {
 				err := hdrreport.WriteReportCSV(reportLatenciesCSV, globalHist)
@@ -434,7 +432,7 @@ func main() {
 			}
 		case managedResp := <-received:
 			count++
-			met.CounterInc(metrics.Requests)
+			metricsBackend.CounterInc(metrics.Requests)
 			if managedResp.err != nil {
 				fmt.Fprintln(os.Stderr, managedResp.err)
 				failed++
@@ -445,8 +443,8 @@ func main() {
 				}
 				if managedResp.code >= 200 && managedResp.code < 500 {
 					good++
-					met.CounterInc(metrics.Successes)
-					met.HistogramObserve(metrics.LatencyHistogram, float64(managedResp.latency))
+					metricsBackend.CounterInc(metrics.Successes)
+					metricsBackend.HistogramObserve(metrics.LatencyHistogram, float64(managedResp.latency))
 				} else {
 					bad++
 				}
