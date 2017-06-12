@@ -22,20 +22,24 @@ func (influx *Influx) Sync() {
 }
 
 // NewInflux :
-func NewInflux() *Influx {
+func NewInflux(timeWindow string) *Influx {
 	influx := Influx{}
 	influx.threadLock, influx.counterLock, influx.histogramLock = new(sync.Mutex), new(sync.Mutex), new(sync.Mutex)
 	counter := make(map[string]gomet.Counter)
-	histrogram := make(map[string]gomet.Histogram)
+	histogram := make(map[string]gomet.Histogram)
 	counter[Requests] = gomet.NewCounter()
 	gomet.Register(Requests, counter[Requests])
 	counter[Successes] = gomet.NewCounter()
 	gomet.Register(Successes, counter[Successes])
-	sample := gomet.NewExpDecaySample(1028, 0.015)
-	histrogram[LatencyHistogram] = gomet.NewHistogram(sample)
-	gomet.Register(LatencyHistogram, histrogram[LatencyHistogram])
+	// latencySample := NewSlidingWindowSample(600)
+	latencySample := NewSlidingTimeWindowSample(timeWindow)
+	histogram[LatencyHistogram] = gomet.NewHistogram(latencySample)
+	gomet.Register(LatencyHistogram, histogram[LatencyHistogram])
+	throughputSample := NewSlidingTimeWindowSample(timeWindow)
+	histogram[ThroughputHistogram] = gomet.NewHistogram(throughputSample)
+	gomet.Register(ThroughputHistogram, histogram[ThroughputHistogram])
 	influx.Counter = counter
-	influx.Histogram = histrogram
+	influx.Histogram = histogram
 	influx.running = false
 	return &influx
 }

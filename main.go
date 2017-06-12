@@ -283,7 +283,6 @@ func main() {
 	min := int64(math.MaxInt64)
 	max := int64(0)
 	failedHashCheck := int64(0)
-
 	hist := hdrhistogram.New(0, DayInMs, 3)
 	globalHist := hdrhistogram.New(0, DayInMs, 3)
 	latencyHistory := ring.New(5)
@@ -456,7 +455,7 @@ func main() {
 				if managedResp.latency > max {
 					max = managedResp.latency
 				}
-
+				metricsBackend.HistogramObserve(metrics.ThroughputHistogram, float64(good))
 				hist.RecordValue(managedResp.latency)
 				globalHist.RecordValue(managedResp.latency)
 			}

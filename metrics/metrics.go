@@ -9,6 +9,8 @@ const (
 	Successes string = "successes"
 	// LatencyHistogram : Histogram
 	LatencyHistogram string = "latency_ms"
+	// ThroughputHistogram : Histogram
+	ThroughputHistogram string = "throughput"
 )
 
 // Metrics :
