@@ -216,64 +216,31 @@ func shouldCheckHash(sampleRate float64) bool {
 	return rand.Float64() < sampleRate
 }
 
-func main() {
-	qps := flag.Int("qps", 1, "QPS to send to backends per request thread")
-	concurrency := flag.Int("concurrency", 1, "Number of request threads")
-	host := flag.String("host", "", "value of Host header to set")
-	method := flag.String("method", "GET", "HTTP method to use")
-	interval := flag.Duration("interval", 10*time.Second, "reporting interval")
-	noreuse := flag.Bool("noreuse", false, "don't reuse connections")
-	compress := flag.Bool("compress", false, "use compression")
-	noLatencySummary := flag.Bool("noLatencySummary", false, "suppress the final latency summary")
-	reportLatenciesCSV := flag.String("reportLatenciesCSV", "",
-		"filename to output hdrhistogram latencies in CSV")
-	help := flag.Bool("help", false, "show help message")
-	totalRequests := flag.Uint64("totalRequests", 0, "total number of requests to send before exiting")
-	headers := make(headerSet)
-	flag.Var(&headers, "header", "HTTP request header. (can be repeated.)")
-	data := flag.String("data", "", "HTTP request data")
-	metricAddr := flag.String("metric-addr", "", "address to serve metrics on")
-	metricsServerBackend := flag.String("metric-server-backend", "", "value can be promethus or influxdb")
-	influxUsername := flag.String("influx-username", "", "influxdb username")
-	influxPassword := flag.String("influx-password", "", "influxdb password")
-	influxDatabase := flag.String("influx-database", "metrics", "influxdb database")
-	hashValue := flag.Uint64("hashValue", 0, "fnv-1a hash value to check the request body against")
-	hashSampleRate := flag.Float64("hashSampleRate", 0.0, "Sampe Rate for checking request body's hash. Interval in the range of [0.0, 1.0]")
-	histogramWindowSize := flag.Duration("histrogram-window-size", time.Minute, "")
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s <url> [flags]\n", path.Base(os.Args[0]))
-		flag.PrintDefaults()
-	}
+type RunLoadParams struct {
+	qps                  int
+	concurrency          int
+	method               string
+	interval             time.Duration
+	noreuse              bool
+	compress             bool
+	noLatencySummary     bool
+	reportLatenciesCSV   string
+	totalRequests        uint64
+	headers              headerSet
+	metricAddr           string
+	hashValue            uint64
+	hashSampleRate       float64
+	dstURL               url.URL
+	hosts                []string
+	requestData          []byte
+	metricsServerBackend string
+	influxUsername       string
+	influxPassword       string
+	influxDatabase       string
+	histogramWindowSize  time.Duration
+}
 
-	flag.Parse()
-
-	if *help {
-		flag.Usage()
-		os.Exit(64)
-	}
-
-	if flag.NArg() != 1 {
-		exUsage("Expecting one argument: the target url to test, e.g. http://localhost:4140/")
-	}
-
-	urldest := flag.Arg(0)
-	dstURL, err := url.Parse(urldest)
-	if err != nil {
-		exUsage("invalid URL: '%s': %s\n", urldest, err.Error())
-	}
-
-	if *qps < 1 {
-		exUsage("qps must be at least 1")
-	}
-
-	if *concurrency < 1 {
-		exUsage("concurrency must be at least 1")
-	}
-
-	hosts := strings.Split(*host, ",")
-
-	requestData := loadData(*data)
-
+func RunLoad(params RunLoadParams) {
 	// Repsonse tracking metadata.
 	count := uint64(0)
 	size := uint64(0)
@@ -287,23 +254,23 @@ func main() {
 	globalHist := hdrhistogram.New(0, DayInMs, 3)
 	latencyHistory := ring.New(5)
 	received := make(chan *MeasuredResponse)
-	timeout := time.After(*interval)
-	timeToWait := CalcTimeToWait(qps)
+	timeout := time.After(params.interval)
+	timeToWait := CalcTimeToWait(&params.qps)
 	var totalTrafficTarget int
-	totalTrafficTarget = *qps * *concurrency * int(interval.Seconds())
+	totalTrafficTarget = params.qps * params.concurrency * int(params.interval.Seconds())
 
-	doTLS := dstURL.Scheme == "https"
-	client := newClient(*compress, doTLS, *noreuse, *concurrency)
+	doTLS := params.dstURL.Scheme == "https"
+	client := newClient(params.compress, doTLS, params.noreuse, params.concurrency)
 	var sendTraffic sync.WaitGroup
 	// The time portion of the header can change due to timezone.
 	timeLen := len(time.Now().Format(time.RFC3339))
 	timePadding := strings.Repeat(" ", timeLen)
-	intLen := len(fmt.Sprintf("%s", *interval))
+	intLen := len(fmt.Sprintf("%s", params.interval))
 	intPadding := strings.Repeat(" ", intLen-2)
 
-	fmt.Printf("# sending %d %s req/s with concurrency=%d to %s ...\n", (*qps * *concurrency), *method, *concurrency, dstURL)
+	fmt.Printf("# sending %d %s req/s with concurrency=%d to %s ...\n", (params.qps * params.concurrency), params.method, params.concurrency, params.dstURL.String())
 	fmt.Printf("# %s good/b/f t   goal%% %s min [p50 p95 p99  p999]  max bhash change\n", timePadding, intPadding)
-	for i := 0; i < *concurrency; i++ {
+	for i := 0; i < params.concurrency; i++ {
 		ticker := time.NewTicker(timeToWait)
 		go func() {
 			// For each goroutine we want to reuse a buffer for performance reasons.
@@ -312,15 +279,15 @@ func main() {
 			for _ = range ticker.C {
 				var checkHash bool
 				hasher := fnv.New64a()
-				if *hashSampleRate > 0.0 {
-					checkHash = shouldCheckHash(*hashSampleRate)
+				if params.hashSampleRate > 0.0 {
+					checkHash = shouldCheckHash(params.hashSampleRate)
 				} else {
 					checkHash = false
 				}
 				shouldFinishLock.RLock()
 				if !shouldFinish {
 					shouldFinishLock.RUnlock()
-					sendRequest(client, *method, dstURL, hosts[rand.Intn(len(hosts))], headers, requestData, atomic.AddUint64(&reqID, 1), *hashValue, checkHash, hasher, received, bodyBuffer)
+					sendRequest(client, params.method, &params.dstURL, params.hosts[rand.Intn(len(params.hosts))], params.headers, params.requestData, atomic.AddUint64(&reqID, 1), params.hashValue, checkHash, hasher, received, bodyBuffer)
 				} else {
 					shouldFinishLock.RUnlock()
 					sendTraffic.Done()
@@ -336,21 +303,21 @@ func main() {
 
 	var metricsBackend metrics.Metrics
 
-	switch strings.ToLower(*metricsServerBackend) {
+	switch strings.ToLower(params.metricsServerBackend) {
 	case ServerBackendPrometheus:
 		metricsBackend = metrics.NewPrometheus()
 	case ServerBackendInfluxDB:
-		metricsBackend = metrics.NewInflux(*histogramWindowSize)
+		metricsBackend = metrics.NewInflux(params.histogramWindowSize)
 	}
 
-	if *metricAddr != "" {
+	if params.metricAddr != "" {
 		var opts metrics.ServerOpts
 		opts = metrics.ServerOpts{
-			Host:          *metricAddr,
-			Username:      *influxUsername,
-			Password:      *influxPassword,
-			Database:      *influxDatabase,
-			WriteInterval: *interval,
+			Host:          params.metricAddr,
+			Username:      params.influxUsername,
+			Password:      params.influxPassword,
+			Database:      params.influxDatabase,
+			WriteInterval: params.interval,
 		}
 		metricsBackend.Monitor(&opts)
 	}
@@ -360,16 +327,15 @@ func main() {
 		// If we get a SIGINT, then start the shutdown process.
 		case <-interrupted:
 			cleanup <- true
+			metricsBackend.Sync()
 		case <-cleanup:
 			finishSendingTraffic()
-			if !*noLatencySummary {
+			if !params.noLatencySummary {
 				hdrreport.PrintLatencySummary(globalHist)
 			}
 
-			metricsBackend.Sync()
-
-			if *reportLatenciesCSV != "" {
-				err := hdrreport.WriteReportCSV(reportLatenciesCSV, globalHist)
+			if params.reportLatenciesCSV != "" {
+				err := hdrreport.WriteReportCSV(&params.reportLatenciesCSV, globalHist)
 				if err != nil {
 					log.Panicf("Unable to write Latency CSV file: %v\n", err)
 				}
@@ -405,7 +371,7 @@ func main() {
 				failed,
 				totalTrafficTarget,
 				percentAchieved,
-				interval,
+				params.interval,
 				min,
 				hist.ValueAtQuantile(50),
 				hist.ValueAtQuantile(95),
@@ -424,9 +390,9 @@ func main() {
 			failed = 0
 			failedHashCheck = 0
 			hist.Reset()
-			timeout = time.After(*interval)
+			timeout = time.After(params.interval)
 
-			if *totalRequests != 0 && reqID > *totalRequests {
+			if params.totalRequests != 0 && reqID > params.totalRequests {
 				cleanup <- true
 			}
 		case managedResp := <-received:
@@ -461,4 +427,90 @@ func main() {
 			}
 		}
 	}
+}
+
+func main() {
+	qps := flag.Int("qps", 1, "QPS to send to backends per request thread")
+	concurrency := flag.Int("concurrency", 1, "Number of request threads")
+	host := flag.String("host", "", "value of Host header to set")
+	method := flag.String("method", "GET", "HTTP method to use")
+	interval := flag.Duration("interval", 10*time.Second, "reporting interval")
+	noreuse := flag.Bool("noreuse", false, "don't reuse connections")
+	compress := flag.Bool("compress", false, "use compression")
+	noLatencySummary := flag.Bool("noLatencySummary", false, "suppress the final latency summary")
+	reportLatenciesCSV := flag.String("reportLatenciesCSV", "",
+		"filename to output hdrhistogram latencies in CSV")
+	help := flag.Bool("help", false, "show help message")
+	totalRequests := flag.Uint64("totalRequests", 0, "total number of requests to send before exiting")
+	headers := make(headerSet)
+	flag.Var(&headers, "header", "HTTP request header. (can be repeated.)")
+	data := flag.String("data", "", "HTTP request data")
+	metricAddr := flag.String("metric-addr", "", "address to serve metrics on")
+	metricsServerBackend := flag.String("metric-server-backend", "", "value can be promethus or influxdb")
+	influxUsername := flag.String("influx-username", "", "influxdb username")
+	influxPassword := flag.String("influx-password", "", "influxdb password")
+	influxDatabase := flag.String("influx-database", "metrics", "influxdb database")
+	hashValue := flag.Uint64("hashValue", 0, "fnv-1a hash value to check the request body against")
+	hashSampleRate := flag.Float64("hashSampleRate", 0.0, "Sampe Rate for checking request body's hash. Interval in the range of [0.0, 1.0]")
+	histogramWindowSize := flag.Duration("histrogram-window-size", time.Minute, "Slide window size of histogram, default is 1 minute")
+
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s <url> [flags]\n", path.Base(os.Args[0]))
+		flag.PrintDefaults()
+	}
+
+	flag.Parse()
+
+	if *help {
+		flag.Usage()
+		os.Exit(64)
+	}
+
+	if flag.NArg() != 1 {
+		exUsage("Expecting one argument: the target url to test, e.g. http://localhost:4140/")
+	}
+
+	urldest := flag.Arg(0)
+	dstURL, err := url.Parse(urldest)
+	if err != nil {
+		exUsage("invalid URL: '%s': %s\n", urldest, err.Error())
+	}
+
+	if *qps < 1 {
+		exUsage("qps must be at least 1")
+	}
+
+	if *concurrency < 1 {
+		exUsage("concurrency must be at least 1")
+	}
+
+	hosts := strings.Split(*host, ",")
+
+	requestData := loadData(*data)
+
+	params := RunLoadParams{
+		qps:                  *qps,
+		concurrency:          *concurrency,
+		method:               *method,
+		interval:             *interval,
+		noreuse:              *noreuse,
+		compress:             *compress,
+		noLatencySummary:     *noLatencySummary,
+		reportLatenciesCSV:   *reportLatenciesCSV,
+		totalRequests:        *totalRequests,
+		headers:              headers,
+		metricAddr:           *metricAddr,
+		hashValue:            *hashValue,
+		hashSampleRate:       *hashSampleRate,
+		dstURL:               *dstURL,
+		hosts:                hosts,
+		requestData:          requestData,
+		metricsServerBackend: *metricsServerBackend,
+		influxUsername:       *influxUsername,
+		influxPassword:       *influxPassword,
+		influxDatabase:       *influxDatabase,
+		histogramWindowSize:  *histogramWindowSize,
+	}
+
+	RunLoad(params)
 }

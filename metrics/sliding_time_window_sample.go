@@ -39,8 +39,6 @@ func NewSlidingTimeWindowSample(duration time.Duration) gomet.Sample {
 }
 
 func (s *SlidingTimeWindowSample) trim() {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
 	now := s.getTick()
 	windowStart := now - s.window
 	windowEnd := now + clearBuffer
@@ -63,8 +61,6 @@ func (s *SlidingTimeWindowSample) trim() {
 }
 
 func (s *SlidingTimeWindowSample) getTick() int64 {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
 	oldTick := s.lastTick
 	tick := time.Now().UnixNano()
 	if tick-oldTick > 0 {
@@ -90,8 +86,6 @@ func (s *SlidingTimeWindowSample) Max() int64 {
 }
 
 func (s *SlidingTimeWindowSample) mappedValue() []int64 {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
 	values := make([]int64, len(s.values))
 	for _, v := range s.values {
 		values = append(values, v)
@@ -103,7 +97,6 @@ func (s *SlidingTimeWindowSample) mappedValue() []int64 {
 func (s *SlidingTimeWindowSample) Mean() float64 {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-
 	return gomet.SampleMean(s.mappedValue())
 }
 
@@ -160,6 +153,7 @@ func (s *SlidingTimeWindowSample) Sum() int64 {
 func (s *SlidingTimeWindowSample) Update(value int64) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+	s.count++
 	if s.count%trimThreshold == 0 {
 		s.trim()
 	}
@@ -169,7 +163,7 @@ func (s *SlidingTimeWindowSample) Update(value int64) {
 // Values : implements interface gomet.Sample
 func (s *SlidingTimeWindowSample) Values() []int64 {
 	s.mutex.Lock()
-	s.mutex.Unlock()
+	defer s.mutex.Unlock()
 	return s.mappedValue()
 }
 
