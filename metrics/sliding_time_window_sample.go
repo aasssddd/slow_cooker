@@ -26,16 +26,14 @@ type SlidingTimeWindowSample struct {
 }
 
 // NewSlidingTimeWindowSample : New
-func NewSlidingTimeWindowSample(duration string) gomet.Sample {
+func NewSlidingTimeWindowSample(duration time.Duration) gomet.Sample {
 	if gomet.UseNilMetrics {
 		return gomet.NilSample{}
 	}
 	sample := &SlidingTimeWindowSample{
 		values:   make(map[int64]int64),
 		lastTick: time.Now().UnixNano() * collisionBuffer,
-	}
-	if dur, err := time.ParseDuration(duration); err == nil {
-		sample.window = dur.Nanoseconds() * collisionBuffer
+		window:   duration.Nanoseconds() * collisionBuffer,
 	}
 	return sample
 }

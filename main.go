@@ -239,7 +239,7 @@ func main() {
 	influxDatabase := flag.String("influx-database", "metrics", "influxdb database")
 	hashValue := flag.Uint64("hashValue", 0, "fnv-1a hash value to check the request body against")
 	hashSampleRate := flag.Float64("hashSampleRate", 0.0, "Sampe Rate for checking request body's hash. Interval in the range of [0.0, 1.0]")
-
+	histogramWindowSize := flag.Duration("histrogram-window-size", time.Minute, "")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s <url> [flags]\n", path.Base(os.Args[0]))
 		flag.PrintDefaults()
@@ -340,7 +340,7 @@ func main() {
 	case ServerBackendPrometheus:
 		metricsBackend = metrics.NewPrometheus()
 	case ServerBackendInfluxDB:
-		metricsBackend = metrics.NewInflux()
+		metricsBackend = metrics.NewInflux(*histogramWindowSize)
 	}
 
 	if *metricAddr != "" {

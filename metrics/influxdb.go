@@ -3,6 +3,7 @@ package metrics
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	gomet "github.com/rcrowley/go-metrics"
 	"github.com/vrischmann/go-metrics-influxdb"
@@ -22,7 +23,7 @@ func (influx *Influx) Sync() {
 }
 
 // NewInflux :
-func NewInflux(timeWindow string) *Influx {
+func NewInflux(timeWindow time.Duration) *Influx {
 	influx := Influx{}
 	influx.threadLock, influx.counterLock, influx.histogramLock = new(sync.Mutex), new(sync.Mutex), new(sync.Mutex)
 	counter := make(map[string]gomet.Counter)

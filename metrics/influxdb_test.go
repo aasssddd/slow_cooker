@@ -6,8 +6,12 @@ import (
 )
 
 func TestInfluxDB(t *testing.T) {
-	var influx Metrics = NewInflux("10s")
-	var influx2 Metrics = NewInflux("5m")
+	var duration, duration2 time.Duration
+	duration, _ = time.ParseDuration("10s")
+	duration2, _ = time.ParseDuration("5m")
+
+	var influx Metrics = NewInflux(duration)
+	var influx2 Metrics = NewInflux(duration2)
 
 	// make sure only one goroutine is running
 	opts := ServerOpts{
