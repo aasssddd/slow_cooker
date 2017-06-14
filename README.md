@@ -9,6 +9,10 @@ a service with a predictable load and concurrency level for a long
 period of time. Instead of getting a report at the end, we wanted
 periodic reports of qps and latency.
 
+# install dependencies
+`go get github.com/tools/godep`
+`godep restore`
+
 # Running it
 
 `go build; ./slow_cooker <url>`
@@ -34,6 +38,10 @@ or:
 | `-interval`           | 10s       | How often to report stats to stdout. |
 | `-method`             | GET       | Determines which HTTP method to use when making the request. |
 | `-metric-addr`        | `<none>`  | Address to use when serving the Prometheus `/metrics` endpoint. No metrics are served if unset. Format is `host:port` or `:port`. |
+| `-metric-server-backend` | `<none>`    | Choose which metric server should be use. Value can be promethus or influxdb |
+| `-influx-username`    | `<unset>` | InfluxDB login user name |
+| `-influx-password`    | `<unset>` | InfluxDB login passsword |
+| `-influx-database`    | `metrics` | Define which database should use. please make sure target database is exists |
 | `-noLatencySummary`   | `<unset>` | If set, don't print the latency histogram report at the end. |
 | `-noreuse`            | `<unset>` | If set, do not reuse connections. Default is to reuse connections. |
 | `-reportLatenciesCSV` | `<none>`  | Filename to write CSV latency values. Format of CSV is millisecond buckets with number of requests in each bucket. |
@@ -41,6 +49,8 @@ or:
 | `-help`               | `<unset>` | If set, print all available flags and exit. |
 | `-hashSampleRate`     | `0.0`     | Sampe Rate for checking request body's hash. Interval in the range of [0.0, 1.0] |
 | `-hashValue`          | `<none>`  | fnv-1a hash value to check the request body against |
+| `-server-mode`          | `false`  | toggle server mode |
+| `-server-port`          | `8081`  | Define server should running on which port, default is 8081 |
 
 # Using multiple Host headers
 

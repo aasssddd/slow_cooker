@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/buoyantio/slow_cooker/load"
+)
 
 func TestHashSampling(t *testing.T) {
 	// With a samplingRate of 0.0 we never check.
@@ -35,7 +39,7 @@ func shouldCheckHashTest(samplingRate float64, iterations uint64, t *testing.T) 
 	checked := uint64(0)
 	unchecked := uint64(0)
 	for i := uint64(0); i < iterations; i++ {
-		if shouldCheckHash(samplingRate) {
+		if load.ShouldCheckHash(samplingRate) {
 			checked++
 		} else {
 			unchecked++

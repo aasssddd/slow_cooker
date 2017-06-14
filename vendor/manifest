@@ -1,0 +1,56 @@
+{
+	"version": 0,
+	"dependencies": [
+		{
+			"importpath": "github.com/influxdata/influxdb/client",
+			"repository": "https://github.com/influxdata/influxdb",
+			"vcs": "git",
+			"revision": "4957b3d8be5fff66b1150f3fe894da09092e923a",
+			"branch": "master",
+			"path": "/client",
+			"notests": true
+		},
+		{
+			"importpath": "github.com/influxdata/influxdb/models",
+			"repository": "https://github.com/influxdata/influxdb",
+			"vcs": "git",
+			"revision": "4957b3d8be5fff66b1150f3fe894da09092e923a",
+			"branch": "master",
+			"path": "models",
+			"notests": true
+		},
+		{
+			"importpath": "github.com/influxdata/influxdb/pkg/escape",
+			"repository": "https://github.com/influxdata/influxdb",
+			"vcs": "git",
+			"revision": "4957b3d8be5fff66b1150f3fe894da09092e923a",
+			"branch": "master",
+			"path": "pkg/escape",
+			"notests": true
+		},
+		{
+			"importpath": "github.com/rcrowley/go-metrics",
+			"repository": "https://github.com/rcrowley/go-metrics",
+			"vcs": "git",
+			"revision": "1f30fe9094a513ce4c700b9a54458bbb0c96996c",
+			"branch": "master",
+			"notests": true
+		},
+		{
+			"importpath": "github.com/stathat/go",
+			"repository": "https://github.com/stathat/go",
+			"vcs": "git",
+			"revision": "74669b9f388d9d788c97399a0824adbfee78400e",
+			"branch": "master",
+			"notests": true
+		},
+		{
+			"importpath": "github.com/vrischmann/go-metrics-influxdb",
+			"repository": "https://github.com/vrischmann/go-metrics-influxdb",
+			"vcs": "git",
+			"revision": "43af8332c303f62ef62663b02b3b7d8a9802002a",
+			"branch": "master",
+			"notests": true
+		}
+	]
+}

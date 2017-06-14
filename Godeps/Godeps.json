@@ -1,9 +1,9 @@
 {
 	"ImportPath": "github.com/buoyantio/slow_cooker",
-	"GoVersion": "go1.7",
-	"GodepVersion": "v76",
+	"GoVersion": "go1.8",
+	"GodepVersion": "v79",
 	"Packages": [
-		"./..."
+		"github.com/buoyantio/slow_cooker"
 	],
 	"Deps": [
 		{
@@ -17,6 +17,21 @@
 		{
 			"ImportPath": "github.com/golang/protobuf/proto",
 			"Rev": "8ee79997227bf9b34611aee7946ae64735e6fd93"
+		},
+		{
+			"ImportPath": "github.com/influxdata/influxdb/client",
+			"Comment": "v1.3.0rc1-2-g9520a0b",
+			"Rev": "9520a0b9cb8d8b4856f9ec0a72cdea886378f4c5"
+		},
+		{
+			"ImportPath": "github.com/influxdata/influxdb/models",
+			"Comment": "v1.3.0rc1-2-g9520a0b",
+			"Rev": "9520a0b9cb8d8b4856f9ec0a72cdea886378f4c5"
+		},
+		{
+			"ImportPath": "github.com/influxdata/influxdb/pkg/escape",
+			"Comment": "v1.3.0rc1-2-g9520a0b",
+			"Rev": "9520a0b9cb8d8b4856f9ec0a72cdea886378f4c5"
 		},
 		{
 			"ImportPath": "github.com/matttproud/golang_protobuf_extensions/pbutil",
@@ -55,8 +70,8 @@
 			"Rev": "abf152e5f3e97f2fafac028d2cc06c1feb87ffa5"
 		},
 		{
-			"ImportPath": "gopkg.in/check.v1",
-			"Rev": "11d3bc7aa68e238947792f30573146a3231fc0f1"
+			"ImportPath": "github.com/rcrowley/go-metrics",
+			"Rev": "1f30fe9094a513ce4c700b9a54458bbb0c96996c"
 		}
 	]
 }
