@@ -3,6 +3,8 @@ package main
 import (
 	"testing"
 	"time"
+
+	"github.com/buoyantio/slow_cooker/load"
 )
 
 func TestQpsCalc(t *testing.T) {
@@ -18,7 +20,7 @@ func TestQpsCalc(t *testing.T) {
 
 func checkDuration(targetQPS int, expectedWaitTimeMs float64, t *testing.T) {
 	expected := time.Duration(expectedWaitTimeMs * float64(time.Millisecond))
-	got := CalcTimeToWait(&targetQPS)
+	got := load.CalcTimeToWait(&targetQPS)
 	if expected != got {
 		t.Errorf("For %d qps, expected to wait %s, instead we wait %s",
 			targetQPS, expected, got)

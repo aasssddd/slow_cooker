@@ -49,6 +49,8 @@ or:
 | `-help`               | `<unset>` | If set, print all available flags and exit. |
 | `-hashSampleRate`     | `0.0`     | Sampe Rate for checking request body's hash. Interval in the range of [0.0, 1.0] |
 | `-hashValue`          | `<none>`  | fnv-1a hash value to check the request body against |
+| `-server-mode`          | `false`  | toggle server mode |
+| `-server-port`          | `8081`  | Define server should running on which port, default is 8081 |
 
 # Using multiple Host headers
 
