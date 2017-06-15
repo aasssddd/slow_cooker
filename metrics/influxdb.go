@@ -76,8 +76,8 @@ func (influx *Influx) Monitor(opts *ServerOpts) {
 func (influx *Influx) CounterInc(name string) {
 	influx.counterLock.Lock()
 	defer influx.counterLock.Unlock()
-	if influx.Counter[name] != nil {
-		influx.Counter[name].Inc(1)
+	if counter, ok := influx.Counter[name]; ok {
+		counter.Inc(1)
 	}
 }
 
@@ -85,7 +85,7 @@ func (influx *Influx) CounterInc(name string) {
 func (influx *Influx) HistogramObserve(name string, data float64) {
 	influx.histogramLock.Lock()
 	defer influx.histogramLock.Unlock()
-	if influx.Histogram[name] != nil {
-		influx.Histogram[name].Update(int64(data))
+	if histogram, ok := influx.Histogram[name]; ok {
+		histogram.Update(int64(data))
 	}
 }
