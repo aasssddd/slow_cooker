@@ -21,8 +21,13 @@ import (
 	"github.com/codahale/hdrhistogram"
 )
 
-func RunLoad(params RunLoadParams) {
+func (params *RunLoadParams) do() {
+	runLoad(params)
+}
+
+func runLoad(params *RunLoadParams) {
 	// Repsonse tracking metadata.
+	fmt.Println("run load mode")
 	count := uint64(0)
 	size := uint64(0)
 	good := uint64(0)
