@@ -67,10 +67,14 @@ func (p *Prometheus) Monitor(opts *ServerOpts) {
 
 // CounterInc : implement metrics
 func (p *Prometheus) CounterInc(name string) {
-	p.Counter[name].Inc()
+	if p.Counter[name] != nil {
+		p.Counter[name].Inc()
+	}
 }
 
 // HistogramObserve : implement metrics
 func (p *Prometheus) HistogramObserve(name string, data float64) {
-	p.Histogram[name].Observe(data)
+	if p.Histogram[name] != nil {
+		p.Histogram[name].Observe(data)
+	}
 }
