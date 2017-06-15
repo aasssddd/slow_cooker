@@ -26,7 +26,8 @@ func RunTest(request *restful.Request, response *restful.Response) {
 		response.WriteEntity(resp)
 		return
 	}
-	load.RunLoad(param)
+	var ins load.Load = &param
+	load.Run(ins)
 	resp.status = statusOk
 	resp.message = "Load test is running now"
 	if err := response.WriteEntity(resp); err != nil {

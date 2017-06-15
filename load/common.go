@@ -150,6 +150,12 @@ func finishSendingTraffic() {
 	shouldFinishLock.Unlock()
 }
 
+func StartSendingTraffic() {
+	shouldFinishLock.Lock()
+	shouldFinish = false
+	shouldFinishLock.Unlock()
+}
+
 type HeaderSet map[string]string
 
 func (h *HeaderSet) String() string {
@@ -224,4 +230,30 @@ type RunLoadParams struct {
 	InfluxPassword       string
 	InfluxDatabase       string
 	HistogramWindowSize  time.Duration
+}
+
+// Qos : struct
+type Qos struct {
+	Latency             time.Duration
+	Throughput          int
+	ConfidenceTimes     int
+	TolerencePrecentage float64
+}
+
+// RunCalibrationParams : latency struct
+type RunCalibrationParams struct {
+	Qos            Qos
+	Qps            int
+	trainingData   [][]float64
+	Concurrency    int
+	Method         string
+	Interval       time.Duration
+	Noreuse        bool
+	Compress       bool
+	Headers        HeaderSet
+	HashValue      uint64
+	HashSampleRate float64
+	DstURL         url.URL
+	Hosts          []string
+	RequestData    []byte
 }

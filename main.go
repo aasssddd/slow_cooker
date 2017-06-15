@@ -15,6 +15,13 @@ import (
 	restful "github.com/emicklei/go-restful"
 )
 
+const (
+	modeLoad       string = "load"
+	modeServer     string = "server"
+	modeLatency    string = "latency"
+	modeThroughput string = "throughput"
+)
+
 func main() {
 	qps := flag.Int("qps", 1, "QPS to send to backends per request thread")
 	concurrency := flag.Int("concurrency", 1, "Number of request threads")
@@ -39,8 +46,12 @@ func main() {
 	hashValue := flag.Uint64("hashValue", 0, "fnv-1a hash value to check the request body against")
 	hashSampleRate := flag.Float64("hashSampleRate", 0.0, "Sampe Rate for checking request body's hash. Interval in the range of [0.0, 1.0]")
 	histogramWindowSize := flag.Duration("histrogram-window-size", time.Minute, "Slide window size of histogram, default is 1 minute")
-	serverMode := flag.Bool("server-mode", false, "toggle server mode")
 	serverPort := flag.Int("server-port", 8081, "Define server should runing on which port, default is 8081")
+	mode := flag.String("mode", "load", "Select running mode form load/latency/throughput/server")
+	qosLatency := flag.Duration("qos-latency", 0, "Set latency goal")
+	qosThroughput := flag.Int("qos-throughput", 0, "Set throughput goal")
+	qosConfidenceTimes := flag.Int("qos-confidence-times", 2, "Set how many times to do verify regressive")
+	qosTolerencePercentage := flag.Float64("qos-tolerence-percentage", 0.1, "Set 0.1 means 10% offset is allow")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s <url> [flags]\n", path.Base(os.Args[0]))
@@ -48,8 +59,9 @@ func main() {
 	}
 
 	flag.Parse()
+	var params load.Load
 
-	if *serverMode {
+	if *mode == modeServer {
 		restful.Add(NewRestfulService())
 		log.Printf("server is start and running on localhost:%v", *serverPort)
 		log.Fatal(http.ListenAndServe(fmt.Sprintf(":%v", *serverPort), nil))
@@ -77,34 +89,77 @@ func main() {
 			load.ExUsage("concurrency must be at least 1")
 		}
 
+		if *qosTolerencePercentage > 1 {
+			load.ExUsage("tolerence percentage must between 0 and 1")
+		}
+
 		hosts := strings.Split(*host, ",")
 
 		requestData := load.LoadData(*data)
 
-		params := load.RunLoadParams{
-			Qps:                  *qps,
-			Concurrency:          *concurrency,
-			Method:               *method,
-			Interval:             *interval,
-			Noreuse:              *noreuse,
-			Compress:             *compress,
-			NoLatencySummary:     *noLatencySummary,
-			ReportLatenciesCSV:   *reportLatenciesCSV,
-			TotalRequests:        *totalRequests,
-			Headers:              headers,
-			MetricAddr:           *metricAddr,
-			HashValue:            *hashValue,
-			HashSampleRate:       *hashSampleRate,
-			DstURL:               *dstURL,
-			Hosts:                hosts,
-			RequestData:          requestData,
-			MetricsServerBackend: *metricsServerBackend,
-			InfluxUsername:       *influxUsername,
-			InfluxPassword:       *influxPassword,
-			InfluxDatabase:       *influxDatabase,
-			HistogramWindowSize:  *histogramWindowSize,
+		switch *mode {
+		case modeLoad:
+			params = &load.RunLoadParams{
+				Qps:                  *qps,
+				Concurrency:          *concurrency,
+				Method:               *method,
+				Interval:             *interval,
+				Noreuse:              *noreuse,
+				Compress:             *compress,
+				NoLatencySummary:     *noLatencySummary,
+				ReportLatenciesCSV:   *reportLatenciesCSV,
+				TotalRequests:        *totalRequests,
+				Headers:              headers,
+				MetricAddr:           *metricAddr,
+				HashValue:            *hashValue,
+				HashSampleRate:       *hashSampleRate,
+				DstURL:               *dstURL,
+				Hosts:                hosts,
+				RequestData:          requestData,
+				MetricsServerBackend: *metricsServerBackend,
+				InfluxUsername:       *influxUsername,
+				InfluxPassword:       *influxPassword,
+				InfluxDatabase:       *influxDatabase,
+				HistogramWindowSize:  *histogramWindowSize,
+			}
+		case modeLatency:
+			params = &load.RunCalibrationParams{
+				Qos: load.Qos{
+					Latency:             *qosLatency,
+					ConfidenceTimes:     *qosConfidenceTimes,
+					TolerencePrecentage: *qosTolerencePercentage},
+				Concurrency:    *concurrency,
+				Method:         *method,
+				Interval:       *interval,
+				Noreuse:        *noreuse,
+				Compress:       *compress,
+				Headers:        headers,
+				HashValue:      *hashValue,
+				HashSampleRate: *hashSampleRate,
+				DstURL:         *dstURL,
+				Hosts:          hosts,
+				RequestData:    requestData,
+			}
+		case modeThroughput:
+			params = &load.RunCalibrationParams{
+				Qos:            load.Qos{Throughput: *qosThroughput},
+				Concurrency:    *concurrency,
+				Method:         *method,
+				Interval:       *interval,
+				Noreuse:        *noreuse,
+				Compress:       *compress,
+				Headers:        headers,
+				HashValue:      *hashValue,
+				HashSampleRate: *hashSampleRate,
+				DstURL:         *dstURL,
+				Hosts:          hosts,
+				RequestData:    requestData,
+			}
+		default:
+			load.ExUsage("-mode must in one of load/server/latency/throughput")
 		}
 
-		load.RunLoad(params)
+		load.Run(params)
 	}
+
 }
