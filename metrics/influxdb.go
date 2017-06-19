@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	influxdb "github.com/hyperpilotio/go-metrics-influxdb"
 	gomet "github.com/rcrowley/go-metrics"
+	"github.com/vrischmann/go-metrics-influxdb"
 )
 
 // Influx :
