@@ -15,11 +15,6 @@ type Prometheus struct {
 	LatencyHistogram prometheus.Histogram
 }
 
-// Sync : Implements Metrics interface
-func (p Prometheus) Sync() {
-
-}
-
 // NewPrometheus :
 func NewPrometheus() *Prometheus {
 	prom := Prometheus{}

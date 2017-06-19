@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
+	influxdb "github.com/hyperpilotio/go-metrics-influxdb"
 	gomet "github.com/rcrowley/go-metrics"
-	"github.com/vrischmann/go-metrics-influxdb"
 )
 
 // Influx :
@@ -15,11 +15,6 @@ type Influx struct {
 	Histogram                              map[string]gomet.Histogram
 	threadLock, counterLock, histogramLock *sync.Mutex
 	running                                bool
-}
-
-// Sync : implements Metrics interface
-func (influx *Influx) Sync() {
-	influxdb.Sync()
 }
 
 // NewInflux :
