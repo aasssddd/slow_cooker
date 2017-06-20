@@ -1,7 +1,7 @@
 ---
 type: container
 name: build
-description: Build-the-code
+description: build code
 
 inputs:
   artifacts:
@@ -9,7 +9,6 @@ inputs:
     path: /go/src/github.com/buoyantio/slow_cooker
   parameters:
     code:
-    influxHost:
 
 container:
   resources:
