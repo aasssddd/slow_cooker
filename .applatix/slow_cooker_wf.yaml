@@ -1,7 +1,7 @@
 ---
 type: workflow
-name: workflow
-description: slow_cooker-workflow - build
+name: SlowCookerWF
+description: build process
 
 inputs:
   parameters:

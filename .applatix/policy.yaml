@@ -1,8 +1,8 @@
 ---
 type: policy
-name: slow-cooker-workflow-policy
+name: SlowCookerPolicy
 description: Trigger workflow on pushes, pull requests and as a cron job
-template: workflow
+template: SlowCookerWF
 notifications:
   -
     when:
