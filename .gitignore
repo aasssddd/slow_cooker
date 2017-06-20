@@ -2,5 +2,3 @@ slow_cooker*
 .DS_Store
 vendor/
 !vendor/github.com/vrischmann/go-metrics-influxdb/
-debug
-debug.json

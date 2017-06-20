@@ -59,7 +59,6 @@ func main() {
 	}
 
 	flag.Parse()
-	var params load.Load
 
 	if *mode == modeServer {
 		restful.Add(NewRestfulService())
@@ -96,6 +95,8 @@ func main() {
 		hosts := strings.Split(*host, ",")
 
 		requestData := load.LoadData(*data)
+
+		var params Load
 
 		switch *mode {
 		case modeLoad:
@@ -159,7 +160,7 @@ func main() {
 			load.ExUsage("-mode must in one of load/server/latency/throughput")
 		}
 
-		load.Run(params)
+		params.Run()
 	}
 
 }

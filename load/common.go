@@ -25,6 +25,10 @@ const (
 	ServerBackendInfluxDB   string = "influxdb"
 )
 
+type Load interface {
+	Run()
+}
+
 // MeasuredResponse holds metadata about the response
 // we receive from the server under test.
 type MeasuredResponse struct {
@@ -206,30 +210,6 @@ func LoadData(data string) []byte {
 // should be checked that their hash matches a known hash.
 func ShouldCheckHash(sampleRate float64) bool {
 	return rand.Float64() < sampleRate
-}
-
-type RunLoadParams struct {
-	Qps                  int
-	Concurrency          int
-	Method               string
-	Interval             time.Duration
-	Noreuse              bool
-	Compress             bool
-	NoLatencySummary     bool
-	ReportLatenciesCSV   string
-	TotalRequests        uint64
-	Headers              HeaderSet
-	MetricAddr           string
-	HashValue            uint64
-	HashSampleRate       float64
-	DstURL               url.URL
-	Hosts                []string
-	RequestData          []byte
-	MetricsServerBackend string
-	InfluxUsername       string
-	InfluxPassword       string
-	InfluxDatabase       string
-	HistogramWindowSize  time.Duration
 }
 
 // Qos : struct

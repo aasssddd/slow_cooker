@@ -6,6 +6,7 @@ import (
 	"log"
 	"math"
 	"math/rand"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -21,13 +22,37 @@ import (
 	"github.com/codahale/hdrhistogram"
 )
 
-func (params *RunLoadParams) do() {
-	runLoad(params)
+type SingleLoad struct {
+	Qps                  int
+	Concurrency          int
+	Method               string
+	Interval             time.Duration
+	Noreuse              bool
+	Compress             bool
+	NoLatencySummary     bool
+	ReportLatenciesCSV   string
+	TotalRequests        uint64
+	Headers              HeaderSet
+	MetricAddr           string
+	HashValue            uint64
+	HashSampleRate       float64
+	DstURL               url.URL
+	Hosts                []string
+	RequestData          []byte
+	MetricsServerBackend string
+	InfluxUsername       string
+	InfluxPassword       string
+	InfluxDatabase       string
+	HistogramWindowSize  time.Duration
+	cleanup              chan bool
 }
 
-func runLoad(params *RunLoadParams) {
+func (load *SingleLoad) Stop() {
+	load.cleanup <- true
+}
+
+func (load *SingleLoad) Run() {
 	// Repsonse tracking metadata.
-	fmt.Println("run load mode")
 	count := uint64(0)
 	size := uint64(0)
 	good := uint64(0)
@@ -40,23 +65,23 @@ func runLoad(params *RunLoadParams) {
 	globalHist := hdrhistogram.New(0, DayInMs, 3)
 	latencyHistory := ring.New(5)
 	received := make(chan *MeasuredResponse)
-	timeout := time.After(params.Interval)
-	timeToWait := CalcTimeToWait(&params.Qps)
+	timeout := time.After(load.Interval)
+	timeToWait := CalcTimeToWait(&load.Qps)
 	var totalTrafficTarget int
-	totalTrafficTarget = params.Qps * params.Concurrency * int(params.Interval.Seconds())
+	totalTrafficTarget = load.Qps * load.Concurrency * int(load.Interval.Seconds())
 
-	doTLS := params.DstURL.Scheme == "https"
-	client := newClient(params.Compress, doTLS, params.Noreuse, params.Concurrency)
+	doTLS := load.DstURL.Scheme == "https"
+	client := newClient(load.Compress, doTLS, load.Noreuse, load.Concurrency)
 	var sendTraffic sync.WaitGroup
 	// The time portion of the header can change due to timezone.
 	timeLen := len(time.Now().Format(time.RFC3339))
 	timePadding := strings.Repeat(" ", timeLen)
-	intLen := len(fmt.Sprintf("%s", params.Interval))
+	intLen := len(fmt.Sprintf("%s", load.Interval))
 	intPadding := strings.Repeat(" ", intLen-2)
 
-	fmt.Printf("# sending %d %s req/s with concurrency=%d to %s ...\n", (params.Qps * params.Concurrency), params.Method, params.Concurrency, params.DstURL.String())
+	fmt.Printf("# sending %d %s req/s with concurrency=%d to %s ...\n", (load.Qps * load.Concurrency), load.Method, load.Concurrency, load.DstURL.String())
 	fmt.Printf("# %s good/b/f t   goal%% %s min [p50 p95 p99  p999]  max bhash change\n", timePadding, intPadding)
-	for i := 0; i < params.Concurrency; i++ {
+	for i := 0; i < load.Concurrency; i++ {
 		ticker := time.NewTicker(timeToWait)
 		go func() {
 			// For each goroutine we want to reuse a buffer for performance reasons.
@@ -65,15 +90,15 @@ func runLoad(params *RunLoadParams) {
 			for _ = range ticker.C {
 				var checkHash bool
 				hasher := fnv.New64a()
-				if params.HashSampleRate > 0.0 {
-					checkHash = ShouldCheckHash(params.HashSampleRate)
+				if load.HashSampleRate > 0.0 {
+					checkHash = ShouldCheckHash(load.HashSampleRate)
 				} else {
 					checkHash = false
 				}
 				shouldFinishLock.RLock()
 				if !shouldFinish {
 					shouldFinishLock.RUnlock()
-					sendRequest(client, params.Method, &params.DstURL, params.Hosts[rand.Intn(len(params.Hosts))], params.Headers, params.RequestData, atomic.AddUint64(&reqID, 1), params.HashValue, checkHash, hasher, received, bodyBuffer)
+					sendRequest(client, load.Method, &load.DstURL, load.Hosts[rand.Intn(len(load.Hosts))], load.Headers, load.RequestData, atomic.AddUint64(&reqID, 1), load.HashValue, checkHash, hasher, received, bodyBuffer)
 				} else {
 					shouldFinishLock.RUnlock()
 					sendTraffic.Done()
@@ -83,27 +108,27 @@ func runLoad(params *RunLoadParams) {
 		}()
 	}
 
-	cleanup := make(chan bool, 2)
+	load.cleanup = make(chan bool, 2)
 	interrupted := make(chan os.Signal, 2)
 	signal.Notify(interrupted, syscall.SIGINT)
 
 	var metricsBackend metrics.Metrics
 
-	switch strings.ToLower(params.MetricsServerBackend) {
+	switch strings.ToLower(load.MetricsServerBackend) {
 	case ServerBackendPrometheus:
 		metricsBackend = metrics.NewPrometheus()
 	case ServerBackendInfluxDB:
-		metricsBackend = metrics.NewInflux(params.HistogramWindowSize)
+		metricsBackend = metrics.NewInflux(load.HistogramWindowSize)
 	}
 
-	if params.MetricAddr != "" {
+	if load.MetricAddr != "" {
 		var opts metrics.ServerOpts
 		opts = metrics.ServerOpts{
-			Host:          params.MetricAddr,
-			Username:      params.InfluxUsername,
-			Password:      params.InfluxPassword,
-			Database:      params.InfluxDatabase,
-			WriteInterval: params.Interval,
+			Host:          load.MetricAddr,
+			Username:      load.InfluxUsername,
+			Password:      load.InfluxPassword,
+			Database:      load.InfluxDatabase,
+			WriteInterval: load.Interval,
 		}
 		metricsBackend.Monitor(&opts)
 	}
@@ -112,16 +137,15 @@ func runLoad(params *RunLoadParams) {
 		select {
 		// If we get a SIGINT, then start the shutdown process.
 		case <-interrupted:
-			cleanup <- true
-			metricsBackend.Sync()
-		case <-cleanup:
+			load.cleanup <- true
+		case <-load.cleanup:
 			finishSendingTraffic()
-			if !params.NoLatencySummary {
+			if !load.NoLatencySummary {
 				hdrreport.PrintLatencySummary(globalHist)
 			}
 
-			if params.ReportLatenciesCSV != "" {
-				err := hdrreport.WriteReportCSV(&params.ReportLatenciesCSV, globalHist)
+			if load.ReportLatenciesCSV != "" {
+				err := hdrreport.WriteReportCSV(&load.ReportLatenciesCSV, globalHist)
 				if err != nil {
 					log.Panicf("Unable to write Latency CSV file: %v\n", err)
 				}
@@ -157,7 +181,7 @@ func runLoad(params *RunLoadParams) {
 				failed,
 				totalTrafficTarget,
 				percentAchieved,
-				params.Interval,
+				load.Interval,
 				min,
 				hist.ValueAtQuantile(50),
 				hist.ValueAtQuantile(95),
@@ -176,10 +200,10 @@ func runLoad(params *RunLoadParams) {
 			failed = 0
 			failedHashCheck = 0
 			hist.Reset()
-			timeout = time.After(params.Interval)
+			timeout = time.After(load.Interval)
 
-			if params.TotalRequests != 0 && reqID > params.TotalRequests {
-				cleanup <- true
+			if load.TotalRequests != 0 && reqID > load.TotalRequests {
+				load.cleanup <- true
 			}
 		case managedResp := <-received:
 			count++
