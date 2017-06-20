@@ -7,30 +7,36 @@ import (
 	restful "github.com/emicklei/go-restful"
 )
 
-const (
-	statusWrong string = "Wrong"
-	statusOk    string = "Ok"
-)
+type Response struct {
+	error bool
+	data  string
+}
 
 // RunTest : Run test
 func RunTest(request *restful.Request, response *restful.Response) {
-	param := load.RunLoadParams{}
-	err := request.ReadEntity(&param)
+	singleLoad := load.SingleLoad{}
+	err := request.ReadEntity(&singleLoad)
 	if err != nil {
 		response.WriteError(http.StatusBadRequest, err)
-	}
-	resp := &Response{}
-	if param.TotalRequests == 0 {
-		resp.status = statusWrong
-		resp.message = "TotalRequests cannot not be 0"
-		response.WriteEntity(resp)
 		return
 	}
-	var ins load.Load = &param
-	load.Run(ins)
+
+	resp := &Response{}
+	if singleLoad.TotalRequests == 0 {
+		resp.error = true
+		resp.data = "TotalRequests cannot not be 0"
+		response.WriteError(http.StatusBadRequest, resp)
+		return
+	}
+
+	go func() {
+		// TODO: Track this run so we can return status of this run
+		singleLoad.Run()
+	}()
+
 	resp.status = statusOk
 	resp.message = "Load test is running now"
 	if err := response.WriteEntity(resp); err != nil {
-		response.WriteErrorString(http.StatusInternalServerError, err.Error())
+		response.WriteError(http.StatusInternalServerError, err)
 	}
 }
