@@ -15,11 +15,6 @@ type Prometheus struct {
 	LatencyHistogram prometheus.Histogram
 }
 
-// Sync : Implements Metrics interface
-func (p Prometheus) Sync() {
-
-}
-
 // NewPrometheus :
 func NewPrometheus() *Prometheus {
 	prom := Prometheus{}
@@ -67,10 +62,14 @@ func (p *Prometheus) Monitor(opts *ServerOpts) {
 
 // CounterInc : implement metrics
 func (p *Prometheus) CounterInc(name string) {
-	p.Counter[name].Inc()
+	if counter, ok := p.Counter[name]; ok {
+		counter.Inc()
+	}
 }
 
 // HistogramObserve : implement metrics
 func (p *Prometheus) HistogramObserve(name string, data float64) {
-	p.Histogram[name].Observe(data)
+	if histogram, ok := p.Histogram[name]; ok {
+		histogram.Observe(data)
+	}
 }

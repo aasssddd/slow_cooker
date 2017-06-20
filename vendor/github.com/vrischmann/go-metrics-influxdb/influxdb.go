@@ -23,22 +23,6 @@ type reporter struct {
 	client *client.Client
 }
 
-var sendNow = make(chan bool, 1)
-var endSending = make(chan bool, 1)
-
-// Sync Sends metrics immediately
-func Sync() {
-	sendNow <- true
-	log.Println("send metrics now")
-	for {
-		switch {
-		case <-endSending:
-			log.Println("metric sent")
-			return
-		}
-	}
-}
-
 // InfluxDB starts a InfluxDB reporter which will post the metrics from the given registry at each d interval.
 func InfluxDB(r metrics.Registry, d time.Duration, url, database, username, password string) {
 	InfluxDBWithTags(r, d, url, database, username, password, nil)
@@ -85,11 +69,6 @@ func (r *reporter) run() {
 
 	for {
 		select {
-		case <-sendNow:
-			if err := r.send(); err != nil {
-				log.Printf("unable to send metrics to InfluxDB. err=%v", err)
-			}
-			endSending <- true
 		case <-intervalTicker:
 			if err := r.send(); err != nil {
 				log.Printf("unable to send metrics to InfluxDB. err=%v", err)

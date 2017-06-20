@@ -2,9 +2,6 @@
 	"ImportPath": "github.com/buoyantio/slow_cooker",
 	"GoVersion": "go1.8",
 	"GodepVersion": "v79",
-	"Packages": [
-		"github.com/buoyantio/slow_cooker"
-	],
 	"Deps": [
 		{
 			"ImportPath": "github.com/beorn7/perks/quantile",
@@ -13,6 +10,16 @@
 		{
 			"ImportPath": "github.com/codahale/hdrhistogram",
 			"Rev": "f8ad88b59a584afeee9d334eff879b104439117b"
+		},
+		{
+			"ImportPath": "github.com/emicklei/go-restful",
+			"Comment": "2.2.0-4-gff4f55a",
+			"Rev": "ff4f55a206334ef123e4f79bbf348980da81ca46"
+		},
+		{
+			"ImportPath": "github.com/emicklei/go-restful/log",
+			"Comment": "2.2.0-4-gff4f55a",
+			"Rev": "ff4f55a206334ef123e4f79bbf348980da81ca46"
 		},
 		{
 			"ImportPath": "github.com/golang/protobuf/proto",
@@ -67,11 +74,19 @@
 		},
 		{
 			"ImportPath": "github.com/prometheus/procfs",
-			"Rev": "abf152e5f3e97f2fafac028d2cc06c1feb87ffa5"
+			"Rev": "a3bfc74126ea9e45ee5d5c6f7fc86191b7d488fb"
+		},
+		{
+			"ImportPath": "github.com/prometheus/procfs/xfs",
+			"Rev": "a3bfc74126ea9e45ee5d5c6f7fc86191b7d488fb"
 		},
 		{
 			"ImportPath": "github.com/rcrowley/go-metrics",
 			"Rev": "1f30fe9094a513ce4c700b9a54458bbb0c96996c"
+		},
+		{
+			"ImportPath": "github.com/vrischmann/go-metrics-influxdb",
+			"Rev": "43af8332c303f62ef62663b02b3b7d8a9802002a"
 		}
 	]
 }

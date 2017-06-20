@@ -59,6 +59,7 @@ func main() {
 	}
 
 	flag.Parse()
+	var params load.Load
 
 	if *mode == modeServer {
 		restful.Add(NewRestfulService())
@@ -96,11 +97,9 @@ func main() {
 
 		requestData := load.LoadData(*data)
 
-		var params Load
-
 		switch *mode {
 		case modeLoad:
-			params = &load.RunLoadParams{
+			params = &load.SingleLoad{
 				Qps:                  *qps,
 				Concurrency:          *concurrency,
 				Method:               *method,
@@ -142,20 +141,29 @@ func main() {
 				RequestData:    requestData,
 			}
 		case modeThroughput:
-			params = &load.RunCalibrationParams{
-				Qos:            load.Qos{Throughput: *qosThroughput},
-				Concurrency:    *concurrency,
-				Method:         *method,
-				Interval:       *interval,
-				Noreuse:        *noreuse,
-				Compress:       *compress,
-				Headers:        headers,
-				HashValue:      *hashValue,
-				HashSampleRate: *hashSampleRate,
-				DstURL:         *dstURL,
-				Hosts:          hosts,
-				RequestData:    requestData,
+			if *qosThroughput <= 0 {
+				load.ExUsage("-qos-throughput must bigger than 0")
 			}
+			// params = &load.RunThroughputParams{
+			// 	Qos: &load.Qos{
+			// 		Throughput:          *qosThroughput,
+			// 		ConfidenceTimes:     *qosConfidenceTimes,
+			// 		TolerencePrecentage: *qosTolerencePercentage,
+			// 	},
+			// 	LoadParams: &load.RunLoadParams{
+			// 		Concurrency:    *concurrency,
+			// 		Method:         *method,
+			// 		Interval:       *interval,
+			// 		Noreuse:        *noreuse,
+			// 		Compress:       *compress,
+			// 		Headers:        headers,
+			// 		HashValue:      *hashValue,
+			// 		HashSampleRate: *hashSampleRate,
+			// 		DstURL:         *dstURL,
+			// 		Hosts:          hosts,
+			// 		RequestData:    requestData,
+			// 	},
+			// }
 		default:
 			load.ExUsage("-mode must in one of load/server/latency/throughput")
 		}
