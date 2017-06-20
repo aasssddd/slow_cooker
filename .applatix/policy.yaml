@@ -1,0 +1,21 @@
+---
+type: policy
+name: slow-cooker-workflow-policy
+description: Trigger workflow on pushes, pull requests and as a cron job
+template: workflow
+notifications:
+  -
+    when:
+      - on_success
+      - on_failure
+    whom:
+      - committer
+      - author
+when:
+  -
+    event: on_push
+    target_branches:
+      - "calibration"
+labels:
+  milestone: build
+  version: 1.0.0
