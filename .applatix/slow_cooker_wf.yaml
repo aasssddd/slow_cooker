@@ -1,0 +1,21 @@
+---
+type: workflow
+name: workflow
+description: slow_cooker-workflow - build
+
+inputs:
+  parameters:
+    commit:
+      default: "%%session.commit%%"
+    repo:
+      default: "%%session.repo%%"
+
+steps:
+-
+  checkout:
+    template: checkout
+-
+  build:
+    template: build
+    parameters:
+      code: "%%steps.checkout.code%%"
