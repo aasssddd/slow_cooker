@@ -1,0 +1,18 @@
+---
+type: container
+name: build
+description: build code
+
+inputs:
+  artifacts:
+  - from: "%%code%%"
+    path: /go/src/github.com/buoyantio/slow_cooker
+  parameters:
+    code:
+
+container:
+  resources:
+    mem_mib: 256
+    cpu_cores: 1.0
+  image: library/golang:1.7.3
+  command: sh -c 'cd /go/src/github.com/buoyantio/slow_cooker && go get github.com/tools/godep && godep restore && go build -o /go/bin/slow_cooker'
