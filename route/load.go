@@ -1,7 +1,12 @@
 package route
 
 import (
+	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/buoyantio/slow_cooker/load"
 	restful "github.com/emicklei/go-restful"
@@ -12,21 +17,127 @@ type Response struct {
 	data  string
 }
 
+type SingleLoadRequest struct {
+	Qps                  int
+	Concurrency          int
+	Method               string
+	Interval             string
+	Noreuse              bool
+	Compress             bool
+	ReportLatenciesCSV   string
+	TotalRequests        int
+	Headers              load.HeaderSet
+	MetricAddr           string
+	HashValue            uint64
+	HashSampleRate       float64
+	DstURL               string
+	Hosts                string
+	RequestData          []byte
+	MetricsServerBackend string
+	InfluxUsername       string
+	InfluxPassword       string
+	InfluxDatabase       string
+	HistogramWindowSize  string
+}
+
+func (resp *Response) Error() string {
+	return resp.data
+}
+
+var _running bool
+var lock sync.Mutex
+
+func isRunning() bool {
+	lock.Lock()
+	defer lock.Unlock()
+	return _running
+}
+
+func startRunning() {
+	lock.Lock()
+	defer lock.Unlock()
+	_running = true
+}
+
+func stopRunning() {
+	lock.Lock()
+	defer lock.Unlock()
+	_running = false
+}
+
 // RunTest : Run test
 func RunTest(request *restful.Request, response *restful.Response) {
-	singleLoad := load.SingleLoad{}
-	err := request.ReadEntity(&singleLoad)
+	resp := &Response{}
+
+	if !isRunning() {
+		startRunning()
+	} else {
+		resp.error = true
+		resp.data = "Another job is running"
+		response.WriteError(http.StatusBadRequest, resp)
+		return
+	}
+	requestObj := SingleLoadRequest{}
+	err := request.ReadEntity(&requestObj)
 	if err != nil {
+		fmt.Println(err)
 		response.WriteError(http.StatusBadRequest, err)
 		return
 	}
 
-	resp := &Response{}
-	if singleLoad.TotalRequests == 0 {
+	if requestObj.TotalRequests == 0 {
 		resp.error = true
 		resp.data = "TotalRequests cannot not be 0"
 		response.WriteError(http.StatusBadRequest, resp)
 		return
+	}
+
+	singleLoad := load.SingleLoad{
+		Qps:                  requestObj.Qps,
+		Concurrency:          requestObj.Concurrency,
+		Method:               requestObj.Method,
+		Noreuse:              requestObj.Noreuse,
+		Compress:             requestObj.Compress,
+		TotalRequests:        uint64(requestObj.TotalRequests),
+		NoLatencySummary:     true,
+		Headers:              requestObj.Headers,
+		Hosts:                strings.Split(requestObj.Hosts, ","),
+		MetricAddr:           requestObj.MetricAddr,
+		HashValue:            requestObj.HashValue,
+		HashSampleRate:       requestObj.HashSampleRate,
+		RequestData:          requestObj.RequestData,
+		MetricsServerBackend: requestObj.MetricsServerBackend,
+		InfluxUsername:       requestObj.InfluxUsername,
+		InfluxPassword:       requestObj.InfluxPassword,
+		InfluxDatabase:       requestObj.InfluxDatabase,
+	}
+
+	// parse interval
+	if interval, err := time.ParseDuration(requestObj.Interval); err == nil {
+		singleLoad.Interval = interval
+	} else {
+		response.WriteError(http.StatusBadRequest, err)
+	}
+
+	// parse DstURL
+	if dstURL, err := url.Parse(requestObj.DstURL); err == nil {
+		singleLoad.DstURL = *dstURL
+	} else {
+		response.WriteError(http.StatusBadRequest, err)
+	}
+
+	// parse histogramWindowSize
+	if histogramWindowSize, err := time.ParseDuration(requestObj.HistogramWindowSize); err == nil {
+		singleLoad.HistogramWindowSize = histogramWindowSize
+	} else {
+		response.WriteError(http.StatusBadRequest, err)
+	}
+
+	// parse metrics server backend
+	if backend := requestObj.MetricsServerBackend; backend != "" {
+		singleLoad.MetricsServerBackend = backend
+	} else {
+		singleLoad.MetricsServerBackend = "prometheus"
 	}
 
 	go func() {
@@ -34,8 +145,8 @@ func RunTest(request *restful.Request, response *restful.Response) {
 		singleLoad.Run()
 	}()
 
-	resp.status = statusOk
-	resp.message = "Load test is running now"
+	resp.error = false
+	resp.data = "Load test is running now"
 	if err := response.WriteEntity(resp); err != nil {
 		response.WriteError(http.StatusInternalServerError, err)
 	}
