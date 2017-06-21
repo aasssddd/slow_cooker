@@ -48,10 +48,6 @@ func main() {
 	histogramWindowSize := flag.Duration("histrogram-window-size", time.Minute, "Slide window size of histogram, default is 1 minute")
 	serverPort := flag.Int("server-port", 8081, "Define server should runing on which port, default is 8081")
 	mode := flag.String("mode", "load", "Select running mode form load/latency/throughput/server")
-	qosLatency := flag.Duration("qos-latency", 0, "Set latency goal")
-	qosThroughput := flag.Int("qos-throughput", 0, "Set throughput goal")
-	qosConfidenceTimes := flag.Int("qos-confidence-times", 2, "Set how many times to do verify regressive")
-	qosTolerencePercentage := flag.Float64("qos-tolerence-percentage", 0.1, "Set 0.1 means 10% offset is allow")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s <url> [flags]\n", path.Base(os.Args[0]))
@@ -59,116 +55,64 @@ func main() {
 	}
 
 	flag.Parse()
-	var params load.Load
+
+	if *help {
+		flag.Usage()
+		os.Exit(64)
+	}
 
 	if *mode == modeServer {
 		restful.Add(NewRestfulService())
-		log.Printf("server is start and running on localhost:%v", *serverPort)
+		log.Printf("Server is start and running on port :%v", *serverPort)
 		log.Fatal(http.ListenAndServe(fmt.Sprintf(":%v", *serverPort), nil))
-	} else {
-		if *help {
-			flag.Usage()
-			os.Exit(64)
-		}
-
-		if flag.NArg() != 1 {
-			load.ExUsage("Expecting one argument: the target url to test, e.g. http://localhost:4140/")
-		}
-
-		urldest := flag.Arg(0)
-		dstURL, err := url.Parse(urldest)
-		if err != nil {
-			load.ExUsage("invalid URL: '%s': %s\n", urldest, err.Error())
-		}
-
-		if *qps < 1 {
-			load.ExUsage("qps must be at least 1")
-		}
-
-		if *concurrency < 1 {
-			load.ExUsage("concurrency must be at least 1")
-		}
-
-		if *qosTolerencePercentage > 1 {
-			load.ExUsage("tolerence percentage must between 0 and 1")
-		}
-
-		hosts := strings.Split(*host, ",")
-
-		requestData := load.LoadData(*data)
-
-		switch *mode {
-		case modeLoad:
-			params = &load.SingleLoad{
-				Qps:                  *qps,
-				Concurrency:          *concurrency,
-				Method:               *method,
-				Interval:             *interval,
-				Noreuse:              *noreuse,
-				Compress:             *compress,
-				NoLatencySummary:     *noLatencySummary,
-				ReportLatenciesCSV:   *reportLatenciesCSV,
-				TotalRequests:        *totalRequests,
-				Headers:              headers,
-				MetricAddr:           *metricAddr,
-				HashValue:            *hashValue,
-				HashSampleRate:       *hashSampleRate,
-				DstURL:               *dstURL,
-				Hosts:                hosts,
-				RequestData:          requestData,
-				MetricsServerBackend: *metricsServerBackend,
-				InfluxUsername:       *influxUsername,
-				InfluxPassword:       *influxPassword,
-				InfluxDatabase:       *influxDatabase,
-				HistogramWindowSize:  *histogramWindowSize,
-			}
-		case modeLatency:
-			params = &load.RunCalibrationParams{
-				Qos: load.Qos{
-					Latency:             *qosLatency,
-					ConfidenceTimes:     *qosConfidenceTimes,
-					TolerencePrecentage: *qosTolerencePercentage},
-				Concurrency:    *concurrency,
-				Method:         *method,
-				Interval:       *interval,
-				Noreuse:        *noreuse,
-				Compress:       *compress,
-				Headers:        headers,
-				HashValue:      *hashValue,
-				HashSampleRate: *hashSampleRate,
-				DstURL:         *dstURL,
-				Hosts:          hosts,
-				RequestData:    requestData,
-			}
-		case modeThroughput:
-			if *qosThroughput <= 0 {
-				load.ExUsage("-qos-throughput must bigger than 0")
-			}
-			// params = &load.RunThroughputParams{
-			// 	Qos: &load.Qos{
-			// 		Throughput:          *qosThroughput,
-			// 		ConfidenceTimes:     *qosConfidenceTimes,
-			// 		TolerencePrecentage: *qosTolerencePercentage,
-			// 	},
-			// 	LoadParams: &load.RunLoadParams{
-			// 		Concurrency:    *concurrency,
-			// 		Method:         *method,
-			// 		Interval:       *interval,
-			// 		Noreuse:        *noreuse,
-			// 		Compress:       *compress,
-			// 		Headers:        headers,
-			// 		HashValue:      *hashValue,
-			// 		HashSampleRate: *hashSampleRate,
-			// 		DstURL:         *dstURL,
-			// 		Hosts:          hosts,
-			// 		RequestData:    requestData,
-			// 	},
-			// }
-		default:
-			load.ExUsage("-mode must in one of load/server/latency/throughput")
-		}
-
-		params.Run()
 	}
 
+	if flag.NArg() != 1 {
+		load.ExUsage("Expecting one argument: the target url to test, e.g. http://localhost:4140/")
+	}
+
+	urldest := flag.Arg(0)
+	dstURL, err := url.Parse(urldest)
+	if err != nil {
+		load.ExUsage("invalid URL: '%s': %s\n", urldest, err.Error())
+	}
+
+	if *qps < 1 {
+		load.ExUsage("qps must be at least 1")
+	}
+
+	if *concurrency < 1 {
+		load.ExUsage("concurrency must be at least 1")
+	}
+
+	hosts := strings.Split(*host, ",")
+
+	requestData := load.LoadData(*data)
+
+	run := load.AppLoad{
+		CommandMode:          true,
+		Qps:                  *qps,
+		Concurrency:          *concurrency,
+		Method:               *method,
+		Interval:             *interval,
+		Noreuse:              *noreuse,
+		Compress:             *compress,
+		NoLatencySummary:     *noLatencySummary,
+		ReportLatenciesCSV:   *reportLatenciesCSV,
+		TotalRequests:        *totalRequests,
+		Headers:              headers,
+		MetricAddr:           *metricAddr,
+		HashValue:            *hashValue,
+		HashSampleRate:       *hashSampleRate,
+		DstURL:               *dstURL,
+		Hosts:                hosts,
+		RequestData:          requestData,
+		MetricsServerBackend: *metricsServerBackend,
+		InfluxUsername:       *influxUsername,
+		InfluxPassword:       *influxPassword,
+		InfluxDatabase:       *influxDatabase,
+		HistogramWindowSize:  *histogramWindowSize,
+	}
+
+	run.Run()
 }
