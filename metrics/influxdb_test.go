@@ -29,6 +29,6 @@ func TestInfluxDB(t *testing.T) {
 		influx2.HistogramObserve(LatencyHistogram, 1)
 	}
 	// default metrics will write every 10 Second, but we make it send immediately
-	influx2.Sync()
+	// influx2.Sync()
 
 }

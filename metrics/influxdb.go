@@ -15,6 +15,7 @@ type Influx struct {
 	Histogram                              map[string]gomet.Histogram
 	threadLock, counterLock, histogramLock *sync.Mutex
 	running                                bool
+	Halt                                   chan bool
 }
 
 // NewInflux :
@@ -37,7 +38,12 @@ func NewInflux(timeWindow time.Duration) *Influx {
 	influx.Counter = counter
 	influx.Histogram = histogram
 	influx.running = false
+	influx.Halt = make(chan bool, 1)
 	return &influx
+}
+
+func (influx *Influx) Stop() {
+	influx.Halt <- true
 }
 
 // Monitor : implement Metrics
@@ -64,6 +70,20 @@ func (influx *Influx) Monitor(opts *ServerOpts) {
 				fmt.Println("error execution monitor routine: ", r)
 			}
 		}()
+	}()
+
+	go func() {
+		for {
+			select {
+			case <-influx.Halt:
+				for k := range influx.Counter {
+					gomet.Unregister(k)
+				}
+				for k := range influx.Histogram {
+					gomet.Unregister(k)
+				}
+			}
+		}
 	}()
 }
 

@@ -47,15 +47,33 @@ type SingleLoad struct {
 	HistogramWindowSize  time.Duration
 	cleanup              chan bool
 	sendTraffic          sync.WaitGroup
+	ExitOnFinish         bool
+	Output               chan string
+	Running              chan bool
 }
 
 func (load *SingleLoad) Stop() {
 	load.cleanup <- true
 }
 
+func (load *SingleLoad) pushOutput(output string) {
+	if load.Output == nil {
+		load.Output = make(chan string)
+	}
+	load.Output <- output
+}
+
+func (load *SingleLoad) setRunning(running bool) {
+	if load.Running == nil {
+		load.Running = make(chan bool, 1)
+	}
+	load.Running <- running
+}
+
 // Entrypoint
 func (load *SingleLoad) Run() {
 	// Repsonse tracking metadata.
+	load.setRunning(true)
 	handlerParam := NewHandlerParams(load)
 
 	doTLS := load.DstURL.Scheme == "https"
@@ -66,8 +84,12 @@ func (load *SingleLoad) Run() {
 	intLen := len(fmt.Sprintf("%s", load.Interval))
 	intPadding := strings.Repeat(" ", intLen-2)
 
-	fmt.Printf("# sending %d %s req/s with concurrency=%d to %s ...\n", (load.Qps * load.Concurrency), load.Method, load.Concurrency, load.DstURL.String())
-	fmt.Printf("# %s good/b/f t   goal%% %s min [p50 p95 p99  p999]  max bhash change\n", timePadding, intPadding)
+	headerline := fmt.Sprintf("# sending %d %s req/s with concurrency=%d to %s ...\n", (load.Qps * load.Concurrency), load.Method, load.Concurrency, load.DstURL.String())
+	fmt.Println(headerline)
+	// load.pushOutput(headerline)
+	headerline = fmt.Sprintf("# %s good/b/f t   goal%% %s min [p50 p95 p99  p999]  max bhash change\n", timePadding, intPadding)
+	fmt.Println(headerline)
+	// load.pushOutput(headerline)
 
 	signal.Notify(handlerParam.interrupted, syscall.SIGINT)
 
@@ -124,6 +146,7 @@ func NewHandlerParams(params *SingleLoad) *HandlerParams {
 
 // RunRequest : Parallel sending request with RunLoadParams.Concurrency threads
 func RunRequest(params *SingleLoad, client *http.Client, timeToWait time.Duration) {
+	StartSendingTraffic()
 	for i := 0; i < params.Concurrency; i++ {
 		ticker := time.NewTicker(timeToWait)
 		go func() {
@@ -162,17 +185,16 @@ func collectMetrics(params *SingleLoad, handlerParam *HandlerParams) {
 		metricsBackend = metrics.NewInflux(params.HistogramWindowSize)
 	}
 
-	if params.MetricAddr != "" {
-		var opts metrics.ServerOpts
-		opts = metrics.ServerOpts{
-			Host:          params.MetricAddr,
-			Username:      params.InfluxUsername,
-			Password:      params.InfluxPassword,
-			Database:      params.InfluxDatabase,
-			WriteInterval: params.Interval,
-		}
-		metricsBackend.Monitor(&opts)
+	var opts metrics.ServerOpts
+	opts = metrics.ServerOpts{
+		Host:          params.MetricAddr,
+		Username:      params.InfluxUsername,
+		Password:      params.InfluxPassword,
+		Database:      params.InfluxDatabase,
+		WriteInterval: params.Interval,
 	}
+	metricsBackend.Monitor(&opts)
+
 	for {
 		select {
 		// If we get a SIGINT, then start the shutdown process.
@@ -194,10 +216,16 @@ func collectMetrics(params *SingleLoad, handlerParam *HandlerParams) {
 				// Don't Wait() in the event loop or else we'll block the workers
 				// from draining.
 				params.sendTraffic.Wait()
-				fmt.Printf("Sleeping 5 seconds to ensure metrics are sent...")
+				fmt.Printf("Sleeping 5 seconds to ensure metrics are sent...\n")
 				time.Sleep(5 * time.Second)
-				os.Exit(0)
+				params.setRunning(false)
+				if params.ExitOnFinish {
+					os.Exit(0)
+				}
+				metricsBackend.Stop()
+				reqID = 0
 			}()
+			break
 		case t := <-handlerParam.timeout:
 			// When all requests are failures, ensure we don't accidentally
 			// print out a monstrously huge number.
@@ -245,6 +273,7 @@ func collectMetrics(params *SingleLoad, handlerParam *HandlerParams) {
 			handlerParam.timeout = time.After(params.Interval)
 
 			if params.TotalRequests != 0 && reqID > params.TotalRequests {
+				handlerParam.timeout = nil
 				handlerParam.cleanup <- true
 			}
 		case managedResp := <-received:

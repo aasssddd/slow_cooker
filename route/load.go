@@ -110,6 +110,7 @@ func RunTest(request *restful.Request, response *restful.Response) {
 		InfluxUsername:       requestObj.InfluxUsername,
 		InfluxPassword:       requestObj.InfluxPassword,
 		InfluxDatabase:       requestObj.InfluxDatabase,
+		ExitOnFinish:         false,
 	}
 
 	// parse interval
@@ -142,7 +143,23 @@ func RunTest(request *restful.Request, response *restful.Response) {
 
 	go func() {
 		// TODO: Track this run so we can return status of this run
+
 		singleLoad.Run()
+	}()
+
+	go func() {
+		for {
+			select {
+			case running := <-singleLoad.Running:
+				if !running {
+					stopRunning()
+					return
+				}
+			case output := <-singleLoad.Output:
+				fmt.Println(output)
+				response.WriteEntity(output)
+			}
+		}
 	}()
 
 	resp.error = false

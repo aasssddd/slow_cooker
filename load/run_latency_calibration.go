@@ -81,10 +81,6 @@ func (param *RunCalibrationParams) updateQPS(actual time.Duration) {
 	param.Qps = predict
 }
 
-func (param *RunCalibrationParams) do() {
-	runLatencyCalibration(param)
-}
-
 var sendTraffic sync.WaitGroup
 var received = make(chan *MeasuredResponse)
 
@@ -122,7 +118,7 @@ func round(params *RunCalibrationParams, hist *hdrhistogram.Histogram) {
 	}
 }
 
-func runLatencyCalibration(params *RunCalibrationParams) {
+func (params *RunCalibrationParams) Run() {
 	// Repsonse tracking metadata.
 	count := uint64(0)
 	size := uint64(0)
