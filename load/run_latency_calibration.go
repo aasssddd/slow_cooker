@@ -7,7 +7,7 @@ import (
 	"github.com/golang/glog"
 )
 
-type LatencyQos struct {
+type SLO struct {
 	LatencyMs  int64
 	Percentile int
 }
@@ -19,14 +19,14 @@ type Record struct {
 
 // RunCalibrationParams : latency struct
 type LatencyCalibration struct {
-	LatencyQos       LatencyQos
+	SLO              SLO `json:"slo"`
 	LoadTime         time.Duration
 	InitialQps       int
 	Step             int
 	RunsPerIntensity int
-	Load             AppLoad
 	Results          []*Record
 	FinalQps         int
+	Load             AppLoad
 }
 
 func (load *LatencyCalibration) getSummaryLatency() int64 {
@@ -37,7 +37,6 @@ func (load *LatencyCalibration) getSummaryLatency() int64 {
 	}
 
 	return sum / int64(load.RunsPerIntensity)
-
 }
 
 func (load *LatencyCalibration) Run() error {
@@ -52,7 +51,7 @@ func (load *LatencyCalibration) Run() error {
 			}()
 			<-time.After(load.LoadTime)
 			load.Load.Stop()
-			latency := load.Load.HandlerParams.GlobalHist.ValueAtQuantile(float64(load.LatencyQos.Percentile))
+			latency := load.Load.HandlerParams.GlobalHist.ValueAtQuantile(float64(load.SLO.Percentile))
 			glog.Infof("Run #%d with qps %d has latency %f", i+1, qps, latency)
 			load.Results = append(load.Results, &Record{
 				LatencyMs: latency,
@@ -62,7 +61,7 @@ func (load *LatencyCalibration) Run() error {
 
 		latency := load.getSummaryLatency()
 
-		if latency > load.LatencyQos.LatencyMs {
+		if latency > load.SLO.LatencyMs {
 			if len(load.Results) <= load.RunsPerIntensity {
 				return errors.New("Initial qps was unable to meet latency requirement")
 			}

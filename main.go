@@ -16,10 +16,7 @@ import (
 )
 
 const (
-	modeLoad       string = "load"
-	modeServer     string = "server"
-	modeLatency    string = "latency"
-	modeThroughput string = "throughput"
+	modeServer string = "server"
 )
 
 func main() {
