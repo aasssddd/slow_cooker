@@ -56,6 +56,13 @@ func (load *SingleLoad) Stop() {
 	load.cleanup <- true
 }
 
+func (load *SingleLoad) WatchOutput() <-chan string {
+	if load.Output == nil {
+		load.Output = make(chan string, math.MaxInt8)
+	}
+	return load.Output
+}
+
 func (load *SingleLoad) pushOutput(output string) {
 	if load.Output == nil {
 		load.Output = make(chan string)
@@ -65,9 +72,16 @@ func (load *SingleLoad) pushOutput(output string) {
 
 func (load *SingleLoad) setRunning(running bool) {
 	if load.Running == nil {
-		load.Running = make(chan bool, 1)
+		load.Running = make(chan bool, 2)
 	}
 	load.Running <- running
+}
+
+func (load *SingleLoad) WatchStatus() <-chan bool {
+	if load.Running == nil {
+		load.Running = make(chan bool, 2)
+	}
+	return load.Running
 }
 
 // Entrypoint
@@ -86,10 +100,10 @@ func (load *SingleLoad) Run() {
 
 	headerline := fmt.Sprintf("# sending %d %s req/s with concurrency=%d to %s ...\n", (load.Qps * load.Concurrency), load.Method, load.Concurrency, load.DstURL.String())
 	fmt.Println(headerline)
-	// load.pushOutput(headerline)
+	load.pushOutput(headerline)
 	headerline = fmt.Sprintf("# %s good/b/f t   goal%% %s min [p50 p95 p99  p999]  max bhash change\n", timePadding, intPadding)
 	fmt.Println(headerline)
-	// load.pushOutput(headerline)
+	load.pushOutput(headerline)
 
 	signal.Notify(handlerParam.interrupted, syscall.SIGINT)
 
@@ -168,7 +182,7 @@ func RunRequest(params *SingleLoad, client *http.Client, timeToWait time.Duratio
 				} else {
 					shouldFinishLock.RUnlock()
 					params.sendTraffic.Done()
-					return
+					break
 				}
 			}
 		}()
@@ -177,6 +191,7 @@ func RunRequest(params *SingleLoad, client *http.Client, timeToWait time.Duratio
 
 func collectMetrics(params *SingleLoad, handlerParam *HandlerParams) {
 	var metricsBackend metrics.Metrics
+	breakEvent := make(chan bool, 1)
 
 	switch strings.ToLower(params.MetricsServerBackend) {
 	case ServerBackendPrometheus:
@@ -197,6 +212,8 @@ func collectMetrics(params *SingleLoad, handlerParam *HandlerParams) {
 
 	for {
 		select {
+		case <-breakEvent:
+			return
 		// If we get a SIGINT, then start the shutdown process.
 		case <-handlerParam.interrupted:
 			handlerParam.cleanup <- true
@@ -216,16 +233,16 @@ func collectMetrics(params *SingleLoad, handlerParam *HandlerParams) {
 				// Don't Wait() in the event loop or else we'll block the workers
 				// from draining.
 				params.sendTraffic.Wait()
-				fmt.Printf("Sleeping 5 seconds to ensure metrics are sent...\n")
+				log.Println("Sleeping 5 seconds to ensure metrics are sent...")
 				time.Sleep(5 * time.Second)
-				params.setRunning(false)
 				if params.ExitOnFinish {
 					os.Exit(0)
 				}
 				metricsBackend.Stop()
 				reqID = 0
+				params.setRunning(false)
+				breakEvent <- true
 			}()
-			break
 		case t := <-handlerParam.timeout:
 			// When all requests are failures, ensure we don't accidentally
 			// print out a monstrously huge number.
@@ -244,7 +261,7 @@ func collectMetrics(params *SingleLoad, handlerParam *HandlerParams) {
 			changeIndicator := window.CalculateChangeIndicator(handlerParam.latencyHistory.Items, lastP99)
 			handlerParam.latencyHistory.Push(lastP99)
 
-			fmt.Printf("%s %6d/%1d/%1d %d %3d%% %s %3d [%3d %3d %3d %4d ] %4d %6d %s\n",
+			execlog := fmt.Sprintf("%s %6d/%1d/%1d %d %3d%% %s %3d [%3d %3d %3d %4d ] %4d %6d %s\n",
 				t.Format(time.RFC3339),
 				handlerParam.good,
 				handlerParam.bad,
@@ -261,6 +278,8 @@ func collectMetrics(params *SingleLoad, handlerParam *HandlerParams) {
 				handlerParam.failedHashCheck,
 				changeIndicator)
 
+			params.pushOutput(execlog)
+			log.Print(execlog)
 			handlerParam.count = 0
 			handlerParam.size = 0
 			handlerParam.good = 0
@@ -270,12 +289,13 @@ func collectMetrics(params *SingleLoad, handlerParam *HandlerParams) {
 			handlerParam.failed = 0
 			handlerParam.failedHashCheck = 0
 			handlerParam.hist.Reset()
-			handlerParam.timeout = time.After(params.Interval)
-
 			if params.TotalRequests != 0 && reqID > params.TotalRequests {
 				handlerParam.timeout = nil
 				handlerParam.cleanup <- true
+			} else {
+				handlerParam.timeout = time.After(params.Interval)
 			}
+
 		case managedResp := <-received:
 			handlerParam.count++
 			metricsBackend.CounterInc(metrics.Requests)

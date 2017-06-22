@@ -2,6 +2,7 @@ package route
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -72,6 +73,7 @@ func RunTest(request *restful.Request, response *restful.Response) {
 	if !isRunning() {
 		startRunning()
 	} else {
+		fmt.Println("Another job is running")
 		resp.error = true
 		resp.data = "Another job is running"
 		response.WriteError(http.StatusBadRequest, resp)
@@ -86,8 +88,9 @@ func RunTest(request *restful.Request, response *restful.Response) {
 	}
 
 	if requestObj.TotalRequests == 0 {
+		fmt.Println("TotalRequests cannot be 0")
 		resp.error = true
-		resp.data = "TotalRequests cannot not be 0"
+		resp.data = "TotalRequests cannot be 0"
 		response.WriteError(http.StatusBadRequest, resp)
 		return
 	}
@@ -142,22 +145,24 @@ func RunTest(request *restful.Request, response *restful.Response) {
 	}
 
 	go func() {
-		// TODO: Track this run so we can return status of this run
-
 		singleLoad.Run()
 	}()
 
 	go func() {
 		for {
 			select {
-			case running := <-singleLoad.Running:
+			case running := <-singleLoad.WatchStatus():
 				if !running {
 					stopRunning()
-					return
+					log.Println("load job finished")
+					break
+				} else {
+
 				}
-			case output := <-singleLoad.Output:
-				fmt.Println(output)
-				response.WriteEntity(output)
+			case output := <-singleLoad.WatchOutput():
+				// TODO: Track this run so we can return status of this run
+				log.Print(output)
+				// response.WriteEntity(output)
 			}
 		}
 	}()

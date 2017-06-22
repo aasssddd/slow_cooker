@@ -96,14 +96,12 @@ func sendRequest(
 
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
 	response, err := client.Do(req)
-
 	if err != nil {
 		received <- &MeasuredResponse{err: err}
 	} else {
 		defer response.Body.Close()
 		if !checkHash {
 			if sz, err := io.CopyBuffer(ioutil.Discard, response.Body, bodyBuffer); err == nil {
-
 				received <- &MeasuredResponse{
 					sz:      uint64(sz),
 					code:    response.StatusCode,
