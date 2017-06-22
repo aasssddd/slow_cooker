@@ -1,0 +1,13 @@
+{
+    "runId": "219d23b5ad41ddec3b6577da8b0bfb106c0aaf7e",
+    "qps": 100,
+    "concurrency": 5,
+    "noLatencySummary": true,
+    "url": "http://localhost:10000",
+    "method": "GET",
+    "interval": 1000000000,
+    "noreuse": true,
+    "compress": false,
+    "noLatencySummary": true,
+    "totalRequests": 1000
+}

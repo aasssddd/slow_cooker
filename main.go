@@ -3,8 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
-	"net/http"
 	"os"
 	"path"
 	"strings"
@@ -12,8 +10,6 @@ import (
 
 	"github.com/buoyantio/slow_cooker/load"
 	"github.com/buoyantio/slow_cooker/metrics"
-
-	restful "github.com/emicklei/go-restful"
 )
 
 const (
@@ -107,7 +103,7 @@ func main() {
 		TotalRequests:       *totalRequests,
 		HashValue:           *hashValue,
 		HashSampleRate:      *hashSampleRate,
-		DstURL:              *dstURL,
+		DstURL:              dstURL,
 		Headers:             headers,
 		Hosts:               hosts,
 		Data:                *data,

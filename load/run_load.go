@@ -3,6 +3,7 @@ package load
 import (
 	"bytes"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"hash"
 	"hash/fnv"
@@ -58,6 +59,7 @@ type HandlerParams struct {
 	sendTraffic        sync.WaitGroup
 }
 
+// AppLoad
 type AppLoad struct {
 	CommandMode         bool
 	RunId               string        `json:"runId"`
@@ -80,6 +82,14 @@ type AppLoad struct {
 	reqID               uint64
 	HandlerParams       *HandlerParams
 	MetricOpts          *metrics.MetricsOpts
+	completeEvent       chan bool
+}
+
+func (load *AppLoad) ListenEvent() <-chan bool {
+	if load.completeEvent == nil {
+		load.completeEvent = make(chan bool, 1)
+	}
+	return load.completeEvent
 }
 
 func (load *AppLoad) OnExit() {
@@ -107,7 +117,7 @@ func (load *AppLoad) Run() error {
 		return errors.New("Unable to parse url: " + err.Error())
 	}
 
-	doTLS := dstURL.Scheme == "https"
+	doTLS := dstUrl.Scheme == "https"
 	client := newClient(load.Compress, doTLS, load.Noreuse, load.Concurrency)
 	// The time portion of the header can change due to timezone.
 	timeLen := len(time.Now().Format(time.RFC3339))
@@ -121,7 +131,7 @@ func (load *AppLoad) Run() error {
 	signal.Notify(load.HandlerParams.interrupted, syscall.SIGINT)
 
 	// Run Request
-	load.runRequest(client)
+	load.runRequest(dstUrl, client)
 
 	// Collect Metrics
 	load.collectMetrics()

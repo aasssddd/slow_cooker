@@ -1,7 +1,13 @@
 package main
 
 import (
-	"github.com/buoyantio/slow_cooker/route"
+	"errors"
+	"fmt"
+	"log"
+	"net/http"
+	"sync"
+
+	"github.com/buoyantio/slow_cooker/load"
 	restful "github.com/emicklei/go-restful"
 )
 
@@ -17,17 +23,18 @@ type Server struct {
 	Service      *restful.WebService
 	Benchmarks   map[string]*BenchmarkState
 	Calibrations map[string]*CalibrationState
-
-	mutex sync.mutex
+	Port         int
+	mutex        sync.Mutex
 }
 
 func NewServer(serverPort int) *Server {
-	return &Server{
+	server := &Server{
 		Port:         serverPort,
-		Service:      NewRestfulService(),
 		Benchmarks:   make(map[string]*BenchmarkState),
 		Calibrations: make(map[string]*CalibrationState),
 	}
+	NewRestfulService(server)
+	return server
 }
 
 func (server *Server) Run() {
@@ -37,12 +44,14 @@ func (server *Server) Run() {
 }
 
 // NewRestfulService : WebServer
-func (server *Server) NewRestfulService() *restful.WebService {
+func NewRestfulService(server *Server) {
 	service := new(restful.WebService)
 	service.Path("/slowcooker").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
 	service.Route(service.POST("/benchmark").To(server.RunTest))
+	service.Route(service.GET("/benchmark/{RunId}").To(server.GetBenchmarkRunningState))
 	service.Route(service.POST("/calibrate").To(server.RunCalibration))
-	return service
+	service.Route(service.GET("/calibrate/{RunId}").To(server.GetCalibrateRunningState))
+	server.Service = service
 }
 
 // RunTest : Run test
@@ -62,16 +71,38 @@ func (server *Server) RunTest(request *restful.Request, response *restful.Respon
 	server.mutex.Lock()
 	defer server.mutex.Unlock()
 
-	if _, ok := server.Benchmarks[singleLoad.LoadId]; ok {
-		response.WriteError(http.StatusBadRequest, fmt.Errorf("Benchmark ID
+	if id := singleLoad.RunId; id == "" {
+		response.WriteError(http.StatusBadRequest, fmt.Errorf("Benchmark ID not provided"))
+	} else if _, ok := server.Benchmarks[id]; !ok {
+		response.WriteError(http.StatusBadRequest, fmt.Errorf("Task exist"))
+	} else {
+		server.Benchmarks[id] = &BenchmarkState{Id: id}
+		go func() {
+			singleLoad.Run()
+		}()
+		// Track this run so we can return status of this run
+		go func() {
+			for {
+				if <-singleLoad.ListenEvent() {
+					// complete
+					delete(server.Benchmarks, id)
+					break
+				}
+			}
+		}()
 	}
 
-	go func() {
-		// TODO: Track this run so we can return status of this run
-		singleLoad.Run()
-	}()
-
 	response.WriteHeader(http.StatusAccepted)
+}
+
+func (server *Server) GetBenchmarkRunningState(request *restful.Request, response *restful.Response) {
+	if id := request.PathParameter("RunId"); id == "" {
+		response.WriteError(http.StatusBadRequest, fmt.Errorf("Benchmark ID not provided"))
+	} else if value, ok := server.Benchmarks[id]; ok {
+		response.WriteEntity(value)
+	} else {
+		response.WriteError(http.StatusBadRequest, fmt.Errorf("Benchmark ID not exists"))
+	}
 }
 
 func (server *Server) RunCalibration(request *restful.Request, response *restful.Response) {
@@ -83,9 +114,35 @@ func (server *Server) RunCalibration(request *restful.Request, response *restful
 	}
 
 	// TODO: Track this run so we can return status of this run
-	go func() {
-		calibration.Run()
-	}()
+	if id := calibration.Load.RunId; id == "" {
+		response.WriteError(http.StatusBadRequest, fmt.Errorf("Calibrate ID not provided"))
+	} else if _, exist := server.Calibrations[id]; exist {
+		response.WriteError(http.StatusBadRequest, fmt.Errorf("Task exist"))
+	} else {
+		go func() {
+			server.Calibrations[calibration.Load.RunId] = &CalibrationState{Id: id}
+			calibration.Run()
+		}()
+		go func() {
+			for {
+				if <-calibration.Load.ListenEvent() {
+					// complete
+					delete(server.Calibrations, id)
+					break
+				}
+			}
+		}()
+	}
 
 	response.WriteHeader(http.StatusAccepted)
+}
+
+func (server *Server) GetCalibrateRunningState(request *restful.Request, response *restful.Response) {
+	if id := request.PathParameter("RunId"); id == "" {
+		response.WriteError(http.StatusBadRequest, fmt.Errorf("Calibrate ID not provided"))
+	} else if value, ok := server.Calibrations[id]; ok {
+		response.WriteEntity(value)
+	} else {
+		response.WriteError(http.StatusBadRequest, fmt.Errorf("Calibrate ID not exists"))
+	}
 }
