@@ -8,8 +8,8 @@ import (
 )
 
 type SLO struct {
-	LatencyMs  int64
-	Percentile int
+	LatencyMs  int64 `json:"latencyMs"`
+	Percentile int   `json:"percentile"`
 }
 
 type Record struct {
@@ -19,14 +19,16 @@ type Record struct {
 
 // RunCalibrationParams : latency struct
 type LatencyCalibration struct {
-	SLO              SLO `json:"slo"`
-	LoadTime         time.Duration
-	InitialQps       int
-	Step             int
-	RunsPerIntensity int
-	Results          []*Record
-	FinalQps         int
-	Load             AppLoad
+	SLO              SLO           `json:"slo"`
+	LoadTime         time.Duration `json:"loadTime"`
+	InitialQps       int           `json:"initialQps"`
+	Step             int           `json:"step"`
+	RunsPerIntensity int           `json:"runsPerIntensity"`
+	Load             AppLoad       `json:"appLoad"`
+
+	// internal state
+	Results  []*Record
+	FinalQps int
 }
 
 func (load *LatencyCalibration) getSummaryLatency() int64 {

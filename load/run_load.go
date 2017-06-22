@@ -55,30 +55,32 @@ type HandlerParams struct {
 }
 
 type AppLoad struct {
-	CommandMode          bool
-	Qps                  int
-	Concurrency          int
-	Method               string
-	Interval             time.Duration
-	Noreuse              bool
-	Compress             bool
-	NoLatencySummary     bool
-	ReportLatenciesCSV   string
-	TotalRequests        uint64
-	Headers              HeaderSet
-	MetricAddr           string
-	HashValue            uint64
-	HashSampleRate       float64
-	DstURL               url.URL
-	Hosts                []string
-	RequestData          []byte
+	CommandMode         bool
+	Qps                 int           `json:"qps"`
+	Concurrency         int           `json:"concurrency"`
+	Method              string        `json:"method"`
+	Interval            time.Duration `json:"interval"`
+	Noreuse             bool          `json:"noreuse"`
+	Compress            bool          `json:"compress"`
+	NoLatencySummary    bool          `json:"noLatencySummary"`
+	ReportLatenciesCSV  string        `json:"reportLatenciesCSV"`
+	TotalRequests       uint64        `json:"totalRequests"`
+	Headers             HeaderSet
+	HashValue           uint64   `json:"hashValue"`
+	HashSampleRate      float64  `json:"hashSampleRate"`
+	DstURL              url.URL  `json:"url"`
+	Hosts               []string `json:"hosts"`
+	RequestData         []byte   `json:"requestData"`
+	HistogramWindowSize time.Duration
+	reqID               uint64
+	HandlerParams       *HandlerParams
+
+	// TODO: These information should come from server launch, not per app
 	MetricsServerBackend string
+	MetricAddr           string
 	InfluxUsername       string
 	InfluxPassword       string
 	InfluxDatabase       string
-	HistogramWindowSize  time.Duration
-	reqID                uint64
-	HandlerParams        *HandlerParams
 }
 
 func (load *AppLoad) OnExit() {
