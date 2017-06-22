@@ -114,6 +114,34 @@ func (load *AppLoad) Stop() {
 	load.HandlerParams.sendTraffic.Wait()
 }
 
+func (load *SingleLoad) WatchOutput() <-chan string {
+	if load.Output == nil {
+		load.Output = make(chan string, math.MaxInt8)
+	}
+	return load.Output
+}
+
+func (load *SingleLoad) pushOutput(output string) {
+	if load.Output == nil {
+		load.Output = make(chan string)
+	}
+	load.Output <- output
+}
+
+func (load *SingleLoad) setRunning(running bool) {
+	if load.Running == nil {
+		load.Running = make(chan bool, 2)
+	}
+	load.Running <- running
+}
+
+func (load *SingleLoad) WatchStatus() <-chan bool {
+	if load.Running == nil {
+		load.Running = make(chan bool, 2)
+	}
+	return load.Running
+}
+
 // Entrypoint
 func (load *AppLoad) Run() error {
 	// Repsonse tracking metadata.
@@ -378,7 +406,7 @@ func (load *AppLoad) collectMetrics() {
 			changeIndicator := window.CalculateChangeIndicator(load.HandlerParams.latencyHistory.Items, lastP99)
 			load.HandlerParams.latencyHistory.Push(lastP99)
 
-			fmt.Printf("%s %6d/%1d/%1d %d %3d%% %s %3d [%3d %3d %3d %4d ] %4d %6d %s\n",
+			execlog := fmt.Sprintf("%s %6d/%1d/%1d %d %3d%% %s %3d [%3d %3d %3d %4d ] %4d %6d %s\n",
 				t.Format(time.RFC3339),
 				load.HandlerParams.Good,
 				load.HandlerParams.Bad,

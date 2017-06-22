@@ -1,6 +1,8 @@
 package metrics
 
 import (
+	"log"
+	"net"
 	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -13,6 +15,7 @@ type Prometheus struct {
 	Counter          map[string]prometheus.Counter
 	Histogram        map[string]prometheus.Histogram
 	LatencyHistogram prometheus.Histogram
+	Halt             chan bool
 }
 
 // NewPrometheus :
@@ -38,8 +41,13 @@ func NewPrometheus() *Prometheus {
 	prom.Counter = c
 	prom.Histogram = h
 	prom.registerMetrics()
+	prom.Halt = make(chan bool, 1)
 
 	return &prom
+}
+
+func (p *Prometheus) Stop() {
+	p.Halt <- true
 }
 
 func (p *Prometheus) registerMetrics() {
@@ -54,9 +62,35 @@ func (p *Prometheus) registerMetrics() {
 
 // Monitor : implement Metrics interface
 func (p *Prometheus) Monitor(opts *ServerOpts) {
+
+	var listener net.Listener
+	if opts.Host != "" {
+		if l, err := net.Listen("tcp", opts.Host); err != nil {
+			log.Fatal(err)
+		} else {
+			listener = l
+			go func() {
+				http.Handle("/metrics", promhttp.Handler())
+				http.Serve(listener, nil)
+			}()
+		}
+	}
 	go func() {
-		http.Handle("/metrics", promhttp.Handler())
-		http.ListenAndServe(opts.Host, nil)
+		for {
+			select {
+			case <-p.Halt:
+				if listener != nil {
+					listener.Close()
+				}
+				for _, v := range p.Counter {
+					prometheus.Unregister(v)
+				}
+				for _, v := range p.Histogram {
+					prometheus.Unregister(v)
+				}
+				break
+			}
+		}
 	}()
 }
 
