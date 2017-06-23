@@ -30,8 +30,11 @@ import (
 	"github.com/codahale/hdrhistogram"
 )
 
+type HeaderSet map[string]string
+
 // HandlerParams : Parameters for handle http response and timeout event
 type HandlerParams struct {
+	requestData        []byte
 	count              uint64
 	size               uint64
 	good               uint64
@@ -48,6 +51,7 @@ type HandlerParams struct {
 	timeToWait         time.Duration
 	totalTrafficTarget int
 	cleanup            chan bool
+	exit               chan bool
 	interrupted        chan os.Signal
 	shouldFinish       bool
 	shouldFinishLock   sync.RWMutex
@@ -56,6 +60,7 @@ type HandlerParams struct {
 
 type AppLoad struct {
 	CommandMode         bool
+	RunId               string        `json:"runId"`
 	Qps                 int           `json:"qps"`
 	Concurrency         int           `json:"concurrency"`
 	Method              string        `json:"method"`
@@ -65,22 +70,16 @@ type AppLoad struct {
 	NoLatencySummary    bool          `json:"noLatencySummary"`
 	ReportLatenciesCSV  string        `json:"reportLatenciesCSV"`
 	TotalRequests       uint64        `json:"totalRequests"`
+	HashValue           uint64        `json:"hashValue"`
+	HashSampleRate      float64       `json:"hashSampleRate"`
+	DstURL              string        `json:"url"`
+	Hosts               []string      `json:"hosts"`
+	Data                string        `json:"data"`
 	Headers             HeaderSet
-	HashValue           uint64   `json:"hashValue"`
-	HashSampleRate      float64  `json:"hashSampleRate"`
-	DstURL              url.URL  `json:"url"`
-	Hosts               []string `json:"hosts"`
-	RequestData         []byte   `json:"requestData"`
 	HistogramWindowSize time.Duration
 	reqID               uint64
 	HandlerParams       *HandlerParams
-
-	// TODO: These information should come from server launch, not per app
-	MetricsServerBackend string
-	MetricAddr           string
-	InfluxUsername       string
-	InfluxPassword       string
-	InfluxDatabase       string
+	MetricOpts          *metrics.MetricsOpts
 }
 
 func (load *AppLoad) OnExit() {
@@ -99,11 +98,16 @@ func (load *AppLoad) Stop() {
 }
 
 // Entrypoint
-func (load *AppLoad) Run() {
+func (load *AppLoad) Run() error {
 	// Repsonse tracking metadata.
 	load.HandlerParams = NewHandlerParams(load)
 
-	doTLS := load.DstURL.Scheme == "https"
+	dstUrl, err := url.Parse(load.DstURL)
+	if err != nil {
+		return errors.New("Unable to parse url: " + err.Error())
+	}
+
+	doTLS := dstURL.Scheme == "https"
 	client := newClient(load.Compress, doTLS, load.Noreuse, load.Concurrency)
 	// The time portion of the header can change due to timezone.
 	timeLen := len(time.Now().Format(time.RFC3339))
@@ -111,7 +115,7 @@ func (load *AppLoad) Run() {
 	intLen := len(fmt.Sprintf("%s", load.Interval))
 	intPadding := strings.Repeat(" ", intLen-2)
 
-	fmt.Printf("# sending %d %s req/s with concurrency=%d to %s ...\n", (load.Qps * load.Concurrency), load.Method, load.Concurrency, load.DstURL.String())
+	fmt.Printf("# sending %d %s req/s with concurrency=%d to %s ...\n", (load.Qps * load.Concurrency), load.Method, load.Concurrency, load.DstURL)
 	fmt.Printf("# %s good/b/f t   goal%% %s min [p50 p95 p99  p999]  max bhash change\n", timePadding, intPadding)
 
 	signal.Notify(load.HandlerParams.interrupted, syscall.SIGINT)
@@ -121,11 +125,16 @@ func (load *AppLoad) Run() {
 
 	// Collect Metrics
 	load.collectMetrics()
+
+	return nil
 }
 
 // NewHandlerParams : initialize HandlerParams
 func NewHandlerParams(params *AppLoad) *HandlerParams {
+	requestData := LoadData(params.Data)
+
 	return &HandlerParams{
+		requestData:        requestData,
 		count:              uint64(0),
 		size:               uint64(0),
 		good:               uint64(0),
@@ -142,6 +151,7 @@ func NewHandlerParams(params *AppLoad) *HandlerParams {
 		timeToWait:         CalcTimeToWait(&params.Qps),
 		totalTrafficTarget: params.Qps * params.Concurrency * int(params.Interval.Seconds()),
 		cleanup:            make(chan bool, 2),
+		exit:               make(chan bool, 2),
 		interrupted:        make(chan os.Signal, 2),
 	}
 }
@@ -149,8 +159,6 @@ func NewHandlerParams(params *AppLoad) *HandlerParams {
 func CalcTimeToWait(qps *int) time.Duration {
 	return time.Duration(int(time.Second) / *qps)
 }
-
-type HeaderSet map[string]string
 
 func (h *HeaderSet) String() string {
 	return ""
@@ -264,7 +272,7 @@ func sendRequest(
 }
 
 // RunRequest : Parallel sending request with RunLoadParams.Concurrency threads
-func (load *AppLoad) runRequest(client *http.Client) {
+func (load *AppLoad) runRequest(dstUrl *url.URL, client *http.Client) {
 	for i := 0; i < load.Concurrency; i++ {
 		ticker := time.NewTicker(load.HandlerParams.timeToWait)
 		go func() {
@@ -282,7 +290,7 @@ func (load *AppLoad) runRequest(client *http.Client) {
 				load.HandlerParams.shouldFinishLock.RLock()
 				if !load.HandlerParams.shouldFinish {
 					load.HandlerParams.shouldFinishLock.RUnlock()
-					sendRequest(client, load.Method, &load.DstURL, load.Hosts[rand.Intn(len(load.Hosts))], load.Headers, load.RequestData, atomic.AddUint64(&load.reqID, 1), load.HashValue, checkHash, hasher, load.HandlerParams.received, bodyBuffer)
+					sendRequest(client, load.Method, dstUrl, load.Hosts[rand.Intn(len(load.Hosts))], load.Headers, load.HandlerParams.requestData, atomic.AddUint64(&load.reqID, 1), load.HashValue, checkHash, hasher, load.HandlerParams.received, bodyBuffer)
 				} else {
 					load.HandlerParams.shouldFinishLock.RUnlock()
 					load.HandlerParams.sendTraffic.Done()
@@ -294,31 +302,14 @@ func (load *AppLoad) runRequest(client *http.Client) {
 }
 
 func (load *AppLoad) collectMetrics() {
-	var metricsBackend metrics.Metrics
-
-	switch strings.ToLower(load.MetricsServerBackend) {
-	case ServerBackendPrometheus:
-		metricsBackend = metrics.NewPrometheus()
-	case ServerBackendInfluxDB:
-		metricsBackend = metrics.NewInflux(load.HistogramWindowSize)
-	default:
-		metricsBackend = metrics.NewPrometheus()
-	}
-
-	if load.MetricAddr != "" {
-		var opts metrics.ServerOpts
-		opts = metrics.ServerOpts{
-			Host:          load.MetricAddr,
-			Username:      load.InfluxUsername,
-			Password:      load.InfluxPassword,
-			Database:      load.InfluxDatabase,
-			WriteInterval: load.Interval,
-		}
-		metricsBackend.Monitor(&opts)
-	}
+	metricsBackend := metrics.NewMetricsBackend(load.MetricOpts, load.HistogramWindowSize, load.Interval)
 
 	for {
 		select {
+		case <-load.HandlerParams.exit:
+			log.Println("Exiting load event loop..")
+			load.OnExit()
+			return
 		// If we get a SIGINT, then start the shutdown process.
 		case <-load.HandlerParams.interrupted:
 			load.HandlerParams.cleanup <- true
@@ -341,7 +332,7 @@ func (load *AppLoad) collectMetrics() {
 				// Don't Wait() in the event loop or else we'll block the workers
 				// from draining.
 				load.HandlerParams.sendTraffic.Wait()
-				load.OnExit()
+				load.HandlerParams.exit <- true
 			}()
 		case t := <-load.HandlerParams.timeout.C:
 			// When all requests are failures, ensure we don't accidentally

@@ -5,19 +5,26 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"path"
 	"strings"
 	"time"
 
 	"github.com/buoyantio/slow_cooker/load"
+	"github.com/buoyantio/slow_cooker/metrics"
+
 	restful "github.com/emicklei/go-restful"
 )
 
 const (
 	modeServer string = "server"
 )
+
+func ExUsage(msg string, args ...interface{}) {
+	fmt.Fprintln(os.Stderr, fmt.Sprintf(msg, args...))
+	fmt.Fprintln(os.Stderr, "Try --help for help.")
+	os.Exit(64)
+}
 
 func main() {
 	qps := flag.Int("qps", 1, "QPS to send to backends per request thread")
@@ -59,57 +66,56 @@ func main() {
 	}
 
 	if *mode == modeServer {
-		restful.Add(NewRestfulService())
-		log.Printf("Server is start and running on port :%v", *serverPort)
-		log.Fatal(http.ListenAndServe(fmt.Sprintf(":%v", *serverPort), nil))
+		server := NewServer(*serverPort)
+		server.Run()
 	}
 
 	if flag.NArg() != 1 {
-		load.ExUsage("Expecting one argument: the target url to test, e.g. http://localhost:4140/")
+		ExUsage("Expecting one argument: the target url to test, e.g. http://localhost:4140/")
 	}
 
-	urldest := flag.Arg(0)
-	dstURL, err := url.Parse(urldest)
-	if err != nil {
-		load.ExUsage("invalid URL: '%s': %s\n", urldest, err.Error())
-	}
+	dstURL := flag.Arg(0)
 
 	if *qps < 1 {
-		load.ExUsage("qps must be at least 1")
+		ExUsage("qps must be at least 1")
 	}
 
 	if *concurrency < 1 {
-		load.ExUsage("concurrency must be at least 1")
+		ExUsage("concurrency must be at least 1")
 	}
 
 	hosts := strings.Split(*host, ",")
 
-	requestData := load.LoadData(*data)
-
-	run := load.AppLoad{
-		CommandMode:          true,
-		Qps:                  *qps,
-		Concurrency:          *concurrency,
-		Method:               *method,
-		Interval:             *interval,
-		Noreuse:              *noreuse,
-		Compress:             *compress,
-		NoLatencySummary:     *noLatencySummary,
-		ReportLatenciesCSV:   *reportLatenciesCSV,
-		TotalRequests:        *totalRequests,
-		Headers:              headers,
-		MetricAddr:           *metricAddr,
-		HashValue:            *hashValue,
-		HashSampleRate:       *hashSampleRate,
-		DstURL:               *dstURL,
-		Hosts:                hosts,
-		RequestData:          requestData,
+	metricOpts := &metrics.MetricsOpts{
 		MetricsServerBackend: *metricsServerBackend,
+		MetricAddr:           *metricAddr,
 		InfluxUsername:       *influxUsername,
 		InfluxPassword:       *influxPassword,
 		InfluxDatabase:       *influxDatabase,
-		HistogramWindowSize:  *histogramWindowSize,
 	}
 
-	run.Run()
+	run := load.AppLoad{
+		CommandMode:         true,
+		Qps:                 *qps,
+		Concurrency:         *concurrency,
+		Method:              *method,
+		Interval:            *interval,
+		Noreuse:             *noreuse,
+		Compress:            *compress,
+		NoLatencySummary:    *noLatencySummary,
+		ReportLatenciesCSV:  *reportLatenciesCSV,
+		TotalRequests:       *totalRequests,
+		HashValue:           *hashValue,
+		HashSampleRate:      *hashSampleRate,
+		DstURL:              *dstURL,
+		Headers:             headers,
+		Hosts:               hosts,
+		Data:                *data,
+		MetricOpts:          metricOpts,
+		HistogramWindowSize: *histogramWindowSize,
+	}
+
+	if err := run.Run(); err != nil {
+		fmt.Println("Failed to run load test: " + err.Error())
+	}
 }

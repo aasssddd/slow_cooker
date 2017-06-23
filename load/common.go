@@ -9,9 +9,7 @@ import (
 
 const (
 	// DayInMs 1 day in milliseconds
-	DayInMs                 int64  = 24 * 60 * 60 * 1000000
-	ServerBackendPrometheus string = "prometheus"
-	ServerBackendInfluxDB   string = "influxdb"
+	DayInMs int64 = 24 * 60 * 60 * 1000000
 )
 
 // MeasuredResponse holds metadata about the response
@@ -23,12 +21,6 @@ type MeasuredResponse struct {
 	timeout         bool
 	failedHashCheck bool
 	err             error
-}
-
-func ExUsage(msg string, args ...interface{}) {
-	fmt.Fprintln(os.Stderr, fmt.Sprintf(msg, args...))
-	fmt.Fprintln(os.Stderr, "Try --help for help.")
-	os.Exit(64)
 }
 
 func LoadData(data string) []byte {
