@@ -33,6 +33,14 @@ import (
 
 type HeaderSet map[string]string
 
+type BenchmarkRecord struct {
+	PercentileMin int64
+	Percentile50  int64
+	Percentile95  int64
+	Percentile99  int64
+	PercentileMax int64
+}
+
 // HandlerParams : Parameters for handle http response and timeout event
 type HandlerParams struct {
 	requestData        []byte
@@ -62,7 +70,7 @@ type HandlerParams struct {
 // AppLoad
 type AppLoad struct {
 	CommandMode         bool
-	RunId               string        `json:"runId"`
+	RunId               string        `json:"runId" binding:"required"`
 	Qps                 int           `json:"qps"`
 	Concurrency         int           `json:"concurrency"`
 	Method              string        `json:"method"`
@@ -77,22 +85,15 @@ type AppLoad struct {
 	DstURL              string        `json:"url"`
 	Hosts               []string      `json:"hosts"`
 	Data                string        `json:"data"`
+	LoadTime            string        `json:'loadTime' binding:"required"`
 	Headers             HeaderSet
 	HistogramWindowSize time.Duration
 	reqID               uint64
 	HandlerParams       *HandlerParams
 	MetricOpts          *metrics.MetricsOpts
-	completeEvent       chan bool
 }
 
-func (load *AppLoad) ListenEvent() <-chan bool {
-	if load.completeEvent == nil {
-		load.completeEvent = make(chan bool, 1)
-	}
-	return load.completeEvent
-}
-
-func (load *AppLoad) OnExit() {
+func (load *AppLoad) onExit() {
 	if load.CommandMode {
 		os.Exit(0)
 	}
@@ -101,9 +102,7 @@ func (load *AppLoad) OnExit() {
 }
 
 func (load *AppLoad) Stop() {
-	if load.HandlerParams != nil {
-		load.HandlerParams.cleanup <- true
-	}
+	load.HandlerParams.cleanup <- true
 	load.HandlerParams.sendTraffic.Wait()
 }
 
@@ -111,6 +110,9 @@ func (load *AppLoad) Stop() {
 func (load *AppLoad) Run() error {
 	// Repsonse tracking metadata.
 	load.HandlerParams = NewHandlerParams(load)
+	if len(load.Hosts) == 0 {
+		load.Hosts = []string{""}
+	}
 
 	dstUrl, err := url.Parse(load.DstURL)
 	if err != nil {
@@ -128,7 +130,9 @@ func (load *AppLoad) Run() error {
 	fmt.Printf("# sending %d %s req/s with concurrency=%d to %s ...\n", (load.Qps * load.Concurrency), load.Method, load.Concurrency, load.DstURL)
 	fmt.Printf("# %s good/b/f t   goal%% %s min [p50 p95 p99  p999]  max bhash change\n", timePadding, intPadding)
 
-	signal.Notify(load.HandlerParams.interrupted, syscall.SIGINT)
+	if load.CommandMode {
+		signal.Notify(load.HandlerParams.interrupted, syscall.SIGINT)
+	}
 
 	// Run Request
 	load.runRequest(dstUrl, client)
@@ -318,7 +322,7 @@ func (load *AppLoad) collectMetrics() {
 		select {
 		case <-load.HandlerParams.exit:
 			log.Println("Exiting load event loop..")
-			load.OnExit()
+			load.onExit()
 			return
 		// If we get a SIGINT, then start the shutdown process.
 		case <-load.HandlerParams.interrupted:

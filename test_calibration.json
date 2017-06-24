@@ -1,19 +1,19 @@
 {
     "slo": {
-        "latencyMs": 200,
+        "latencyMs": 20,
         "percentile": 95
     },
-    "loadTime": 6000000000,
     "initialQps": 5,
     "step": 5,
     "runsPerIntensity": 2,
-    "load": {
+    "appLoad": {
+        "loadTime": "10s",
         "runId": "219d23b5ad41ddec3b6577da8b0bfb106c0aaf7e",
         "concurrency": 5,
         "noLatencySummary": true,
         "url": "http://localhost:10000",
         "method": "GET",
-        "interval": 1000000000,
+        "interval": 60000000000000,
         "noreuse": true,
         "compress": false,
         "noLatencySummary": true,

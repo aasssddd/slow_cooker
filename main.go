@@ -81,6 +81,7 @@ func main() {
 	}
 
 	hosts := strings.Split(*host, ",")
+	fmt.Println("%+v", hosts)
 
 	metricOpts := &metrics.MetricsOpts{
 		MetricsServerBackend: *metricsServerBackend,
