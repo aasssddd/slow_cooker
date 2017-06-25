@@ -15,17 +15,17 @@ type SLO struct {
 }
 
 type CalibrationRecord struct {
-	Qps       int
-	LatencyMs int64
+	Concurrency int
+	LatencyMs   int64
 }
 
 // RunCalibrationParams : latency struct
 type LatencyCalibration struct {
-	SLO              SLO     `json:"slo"`
-	InitialQps       int     `json:"initialQps"`
-	Step             int     `json:"step"`
-	RunsPerIntensity int     `json:"runsPerIntensity"`
-	Load             AppLoad `json:"appLoad"`
+	SLO                SLO     `json:"slo"`
+	InitialConcurrency int     `json:"initialConcurrency"`
+	Step               int     `json:"step"`
+	RunsPerIntensity   int     `json:"runsPerIntensity"`
+	Load               AppLoad `json:"appLoad"`
 
 	// internal state
 	Results []*CalibrationRecord
@@ -48,23 +48,23 @@ func (load *LatencyCalibration) Run() (int, error) {
 	}
 
 	load.Results = make([]*CalibrationRecord, 0)
-	qps := load.InitialQps
-	finalQps := 0
+	concurrency := load.InitialConcurrency
+	finalConcurrency := 0
 	runs := 1
 	for {
-		load.Load.Qps = qps
+		load.Load.Concurrency = concurrency
 		for i := 0; i < load.RunsPerIntensity; i++ {
-			glog.Infof("Starting calibration run #%d with qps %d", i+1, qps)
+			glog.Infof("Starting calibration run #%d with concurrency %d", i+1, concurrency)
 			go func() {
 				load.Load.Run()
 			}()
 			<-time.After(loadDuration)
 			load.Load.Stop()
 			latency := load.Load.HandlerParams.GlobalHist.ValueAtQuantile(float64(load.SLO.Percentile))
-			glog.Infof("Run #%d with qps %d has latency %d", i+1, qps, latency)
+			glog.Infof("Run #%d with concurrency %d has latency %d", i+1, concurrency, latency)
 			load.Results = append(load.Results, &CalibrationRecord{
-				LatencyMs: latency,
-				Qps:       qps,
+				LatencyMs:   latency,
+				Concurrency: concurrency,
 			})
 		}
 
@@ -75,8 +75,8 @@ func (load *LatencyCalibration) Run() (int, error) {
 				return 0, errors.New("Initial qps was unable to meet latency requirement")
 			}
 
-			finalQps = load.Results[len(load.Results)-load.RunsPerIntensity-1].Qps
-			glog.Infof("Found final Qps %d", finalQps)
+			finalConcurrency = load.Results[len(load.Results)-load.RunsPerIntensity-1].Concurrency
+			glog.Infof("Found final concurrency %d", finalConcurrency)
 			break
 		}
 
@@ -86,8 +86,8 @@ func (load *LatencyCalibration) Run() (int, error) {
 			return 0, errors.New("Max runs reached without finding final qps")
 		}
 
-		qps += load.Step
+		concurrency += load.Step
 	}
 
-	return finalQps, nil
+	return finalConcurrency, nil
 }

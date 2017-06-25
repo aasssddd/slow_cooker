@@ -171,6 +171,10 @@ func NewHandlerParams(params *AppLoad) *HandlerParams {
 }
 
 func CalcTimeToWait(qps *int) time.Duration {
+	if *qps == 0 {
+		return time.Duration(time.Nanosecond * 1)
+	}
+
 	return time.Duration(int(time.Second) / *qps)
 }
 

@@ -3,10 +3,11 @@
         "latencyMs": 20,
         "percentile": 95
     },
-    "initialQps": 5,
+    "initialConcurrency": 5,
     "step": 5,
     "runsPerIntensity": 2,
     "appLoad": {
+        "qps": 5,
         "loadTime": "10s",
         "runId": "219d23b5ad41ddec3b6577da8b0bfb106c0aaf7e",
         "concurrency": 5,
