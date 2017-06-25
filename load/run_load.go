@@ -41,6 +41,12 @@ type BenchmarkRecord struct {
 	PercentileMax int64
 }
 
+type BenchmarkRequest struct {
+	RunId    string  `json:"runId"`
+	LoadTime string  `json:"loadTime"`
+	AppLoad  AppLoad `json:"appLoad"`
+}
+
 // HandlerParams : Parameters for handle http response and timeout event
 type HandlerParams struct {
 	requestData        []byte
@@ -70,7 +76,6 @@ type HandlerParams struct {
 // AppLoad
 type AppLoad struct {
 	CommandMode         bool
-	RunId               string        `json:"runId" binding:"required"`
 	Qps                 int           `json:"qps"`
 	Concurrency         int           `json:"concurrency"`
 	Method              string        `json:"method"`
@@ -85,7 +90,6 @@ type AppLoad struct {
 	DstURL              string        `json:"url"`
 	Hosts               []string      `json:"hosts"`
 	Data                string        `json:"data"`
-	LoadTime            string        `json:'loadTime' binding:"required"`
 	Headers             HeaderSet
 	HistogramWindowSize time.Duration
 	reqID               uint64

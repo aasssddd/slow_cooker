@@ -10,6 +10,7 @@ import (
 
 	"github.com/buoyantio/slow_cooker/load"
 	restful "github.com/emicklei/go-restful"
+	"github.com/golang/glog"
 )
 
 const (
@@ -26,11 +27,11 @@ type BenchmarkState struct {
 }
 
 type CalibrationState struct {
-	Id       string
-	Results  []*load.CalibrationRecord
-	FinalQps int
-	Error    string
-	State    string
+	Id               string
+	Results          []*load.CalibrationRecord
+	FinalConcurrency int
+	Error            string
+	State            string
 }
 
 type Server struct {
@@ -68,19 +69,14 @@ func newRestfulService(server *Server) {
 
 // RunTest : Run test
 func (server *Server) RunBenchmark(request *restful.Request, response *restful.Response) {
-	singleLoad := load.AppLoad{}
-	err := request.ReadEntity(&singleLoad)
+	loadRequest := load.BenchmarkRequest{}
+	err := request.ReadEntity(&loadRequest)
 	if err != nil {
-		response.WriteError(http.StatusBadRequest, err)
+		response.WriteError(http.StatusBadRequest, errors.New("Unable to read benchmark request: "+err.Error()))
 		return
 	}
 
-	if singleLoad.TotalRequests == 0 {
-		response.WriteError(http.StatusBadRequest, errors.New("TotalRequests cannot not be 0"))
-		return
-	}
-
-	id := singleLoad.RunId
+	id := loadRequest.RunId
 	if id == "" {
 		response.WriteError(http.StatusBadRequest, fmt.Errorf("Benchmark ID not provided"))
 		return
@@ -97,7 +93,7 @@ func (server *Server) RunBenchmark(request *restful.Request, response *restful.R
 	state := &BenchmarkState{Id: id, State: RUNNING_STATE}
 	server.Benchmarks[id] = state
 
-	loadDuration, err := time.ParseDuration(singleLoad.LoadTime)
+	loadDuration, err := time.ParseDuration(loadRequest.LoadTime)
 	if err != nil {
 		response.WriteError(http.StatusBadRequest, fmt.Errorf("Unable to parse load time: "+err.Error()))
 		return
@@ -106,17 +102,17 @@ func (server *Server) RunBenchmark(request *restful.Request, response *restful.R
 	go func() {
 		for i := 0; i < 3; i++ {
 			go func() {
-				singleLoad.Run()
+				loadRequest.AppLoad.Run()
 			}()
 
 			<-time.After(loadDuration)
-			singleLoad.Stop()
+			loadRequest.AppLoad.Stop()
 			newRecord := &load.BenchmarkRecord{
-				PercentileMin: singleLoad.HandlerParams.GlobalHist.Min(),
-				Percentile50:  singleLoad.HandlerParams.GlobalHist.ValueAtQuantile(50),
-				Percentile95:  singleLoad.HandlerParams.GlobalHist.ValueAtQuantile(95),
-				Percentile99:  singleLoad.HandlerParams.GlobalHist.ValueAtQuantile(99),
-				PercentileMax: singleLoad.HandlerParams.GlobalHist.Max(),
+				PercentileMin: loadRequest.AppLoad.HandlerParams.GlobalHist.Min(),
+				Percentile50:  loadRequest.AppLoad.HandlerParams.GlobalHist.ValueAtQuantile(50),
+				Percentile95:  loadRequest.AppLoad.HandlerParams.GlobalHist.ValueAtQuantile(95),
+				Percentile99:  loadRequest.AppLoad.HandlerParams.GlobalHist.ValueAtQuantile(99),
+				PercentileMax: loadRequest.AppLoad.HandlerParams.GlobalHist.Max(),
 			}
 
 			state.Results = append(state.Results, newRecord)
@@ -149,31 +145,33 @@ func (server *Server) RunCalibration(request *restful.Request, response *restful
 		return
 	}
 
-	id := calibration.Load.RunId
+	id := calibration.RunId
 	if id == "" {
 		response.WriteError(http.StatusBadRequest, fmt.Errorf("Calibrate ID not provided"))
 		return
 	}
 
+	glog.V(1).Infof("Received run calibration request: %+v", calibration)
+
 	server.mutex.Lock()
 	defer server.mutex.Unlock()
 
 	if _, exist := server.Calibrations[id]; exist {
-		response.WriteError(http.StatusBadRequest, fmt.Errorf("Task exist"))
+		response.WriteError(http.StatusBadRequest, fmt.Errorf("Calibration %s is already running", id))
 		return
 	}
 
 	state := &CalibrationState{Id: id, State: RUNNING_STATE}
-	server.Calibrations[calibration.Load.RunId] = state
+	server.Calibrations[calibration.RunId] = state
 
 	go func() {
-		finalQps, err := calibration.Run()
+		finalConcurrency, err := calibration.Run()
 		if err != nil {
 			state.Error = err.Error()
 			state.State = FAILED_STATE
 		} else {
 			state.Results = calibration.Results
-			state.FinalQps = finalQps
+			state.FinalConcurrency = finalConcurrency
 			state.State = FINISHED_STATE
 		}
 	}()
