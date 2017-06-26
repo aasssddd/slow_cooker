@@ -60,9 +60,9 @@ func (server *Server) Run() {
 func newRestfulService(server *Server) {
 	service := new(restful.WebService)
 	service.Path("/slowcooker").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
-	service.Route(service.POST("/benchmark").To(server.RunBenchmark))
+	service.Route(service.POST("/benchmark/{RunId}").To(server.RunBenchmark))
 	service.Route(service.GET("/benchmark/{RunId}").To(server.GetBenchmarkRunningState))
-	service.Route(service.POST("/calibrate").To(server.RunCalibration))
+	service.Route(service.POST("/calibrate/{RunId}").To(server.RunCalibration))
 	service.Route(service.GET("/calibrate/{RunId}").To(server.GetCalibrateRunningState))
 	restful.Add(service)
 }
@@ -76,7 +76,7 @@ func (server *Server) RunBenchmark(request *restful.Request, response *restful.R
 		return
 	}
 
-	id := loadRequest.RunId
+	id := request.PathParameter("RunId")
 	if id == "" {
 		response.WriteError(http.StatusBadRequest, fmt.Errorf("Benchmark ID not provided"))
 		return
@@ -145,7 +145,7 @@ func (server *Server) RunCalibration(request *restful.Request, response *restful
 		return
 	}
 
-	id := calibration.RunId
+	id := request.PathParameter("RunId")
 	if id == "" {
 		response.WriteError(http.StatusBadRequest, fmt.Errorf("Calibrate ID not provided"))
 		return

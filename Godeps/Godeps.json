@@ -1,49 +1,11 @@
 {
-	"ImportPath": ".",
+	"ImportPath": "github.com/buoyantio/slow_cooker",
 	"GoVersion": "go1.8",
 	"GodepVersion": "v79",
-	"Packages": [
-		"github.com/buoyantio/slow_cooker"
-	],
 	"Deps": [
 		{
 			"ImportPath": "github.com/beorn7/perks/quantile",
 			"Rev": "3ac7bf7a47d159a033b107610db8a1b6575507a4"
-		},
-		{
-			"ImportPath": "github.com/buoyantio/slow_cooker",
-			"Comment": "1.1.0-43-g61f7f25",
-			"Rev": "61f7f25a4485bba26c755bf31c37d1c6516d0ae8"
-		},
-		{
-			"ImportPath": "github.com/buoyantio/slow_cooker/hdrreport",
-			"Comment": "1.1.0-43-g61f7f25",
-			"Rev": "61f7f25a4485bba26c755bf31c37d1c6516d0ae8"
-		},
-		{
-			"ImportPath": "github.com/buoyantio/slow_cooker/load",
-			"Comment": "1.1.0-43-g61f7f25",
-			"Rev": "61f7f25a4485bba26c755bf31c37d1c6516d0ae8"
-		},
-		{
-			"ImportPath": "github.com/buoyantio/slow_cooker/metrics",
-			"Comment": "1.1.0-43-g61f7f25",
-			"Rev": "61f7f25a4485bba26c755bf31c37d1c6516d0ae8"
-		},
-		{
-			"ImportPath": "github.com/buoyantio/slow_cooker/ring",
-			"Comment": "1.1.0-43-g61f7f25",
-			"Rev": "61f7f25a4485bba26c755bf31c37d1c6516d0ae8"
-		},
-		{
-			"ImportPath": "github.com/buoyantio/slow_cooker/route",
-			"Comment": "1.1.0-43-g61f7f25",
-			"Rev": "61f7f25a4485bba26c755bf31c37d1c6516d0ae8"
-		},
-		{
-			"ImportPath": "github.com/buoyantio/slow_cooker/window",
-			"Comment": "1.1.0-43-g61f7f25",
-			"Rev": "61f7f25a4485bba26c755bf31c37d1c6516d0ae8"
 		},
 		{
 			"ImportPath": "github.com/codahale/hdrhistogram",
