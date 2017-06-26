@@ -71,6 +71,7 @@ func (server *Server) RunBenchmark(request *restful.Request, response *restful.R
 	singleLoad := load.AppLoad{}
 	err := request.ReadEntity(&singleLoad)
 	if err != nil {
+		fmt.Println(err)
 		response.WriteError(http.StatusBadRequest, err)
 		return
 	}
@@ -89,7 +90,7 @@ func (server *Server) RunBenchmark(request *restful.Request, response *restful.R
 	server.mutex.Lock()
 	defer server.mutex.Unlock()
 
-	if _, ok := server.Benchmarks[id]; !ok {
+	if _, ok := server.Benchmarks[id]; ok {
 		response.WriteError(http.StatusBadRequest, fmt.Errorf("Task exist"))
 		return
 	}
