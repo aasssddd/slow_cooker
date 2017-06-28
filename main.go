@@ -16,6 +16,20 @@ const (
 	modeServer string = "server"
 )
 
+// DayInMs 1 day in milliseconds
+const DayInMs int64 = 24 * 60 * 60 * 1000000
+
+// MeasuredResponse holds metadata about the response
+// we receive from the server under test.
+type MeasuredResponse struct {
+	sz              uint64
+	code            int
+	latency         int64
+	timeout         bool
+	failedHashCheck bool
+	err             error
+}
+
 func ExUsage(msg string, args ...interface{}) {
 	fmt.Fprintln(os.Stderr, fmt.Sprintf(msg, args...))
 	fmt.Fprintln(os.Stderr, "Try --help for help.")

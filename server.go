@@ -20,18 +20,18 @@ const (
 )
 
 type BenchmarkState struct {
-	Id      string
-	Error   string
-	State   string
-	Results []*load.BenchmarkRecord
+	Id      string                  `json:"id"`
+	Error   string                  `json:"error"`
+	State   string                  `json:"state"`
+	Results []*load.BenchmarkRecord `json:"results"`
 }
 
 type CalibrationState struct {
-	Id               string
-	Results          []*load.CalibrationRecord
-	FinalConcurrency int
-	Error            string
-	State            string
+	Id          string                    `json:"id"`
+	Results     []*load.CalibrationRecord `json:"results"`
+	FinalResult *load.CalibrationRecord   `json:"finalResult"`
+	Error       string                    `json:"error"`
+	State       string                    `json:"state"`
 }
 
 type Server struct {
@@ -108,6 +108,7 @@ func (server *Server) RunBenchmark(request *restful.Request, response *restful.R
 			<-time.After(loadDuration)
 			loadRequest.AppLoad.Stop()
 			newRecord := &load.BenchmarkRecord{
+				Failures:      loadRequest.AppLoad.HandlerParams.Failed,
 				PercentileMin: loadRequest.AppLoad.HandlerParams.GlobalHist.Min(),
 				Percentile50:  loadRequest.AppLoad.HandlerParams.GlobalHist.ValueAtQuantile(50),
 				Percentile95:  loadRequest.AppLoad.HandlerParams.GlobalHist.ValueAtQuantile(95),
@@ -162,16 +163,18 @@ func (server *Server) RunCalibration(request *restful.Request, response *restful
 	}
 
 	state := &CalibrationState{Id: id, State: RUNNING_STATE}
-	server.Calibrations[calibration.RunId] = state
+	server.Calibrations[id] = state
+
+	run := load.NewLatencyCalibrationRun(id, &calibration)
 
 	go func() {
-		finalConcurrency, err := calibration.Run()
+		err := run.Run()
 		if err != nil {
 			state.Error = err.Error()
 			state.State = FAILED_STATE
 		} else {
-			state.Results = calibration.Results
-			state.FinalConcurrency = finalConcurrency
+			state.Results = run.Results
+			state.FinalResult = run.FinalResult
 			state.State = FINISHED_STATE
 		}
 	}()

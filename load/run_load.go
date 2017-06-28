@@ -34,11 +34,12 @@ import (
 type HeaderSet map[string]string
 
 type BenchmarkRecord struct {
-	PercentileMin int64
-	Percentile50  int64
-	Percentile95  int64
-	Percentile99  int64
-	PercentileMax int64
+	Failures      uint64 `json:"failures"`
+	PercentileMin int64  `json:"percentileMin"`
+	Percentile50  int64  `json:"percentile50"`
+	Percentile95  int64  `json:"percentile95"`
+	Percentile99  int64  `json:"percentile99"`
+	PercentileMax int64  `json:"percentileMax"`
 }
 
 type BenchmarkRequest struct {
@@ -49,22 +50,24 @@ type BenchmarkRequest struct {
 
 // HandlerParams : Parameters for handle http response and timeout event
 type HandlerParams struct {
-	requestData        []byte
+	// Public available counters
+	Good            uint64
+	Bad             uint64
+	Failed          uint64
+	Min             int64
+	Max             int64
+	FailedHashCheck int64
+	GlobalHist      *hdrhistogram.Histogram
+
 	count              uint64
 	size               uint64
-	good               uint64
-	bad                uint64
-	failed             uint64
-	min                int64
-	max                int64
-	failedHashCheck    int64
-	hist               *hdrhistogram.Histogram
-	GlobalHist         *hdrhistogram.Histogram
-	latencyHistory     ring.IntRing
-	received           chan *MeasuredResponse
 	timeout            *time.Timer
 	timeToWait         time.Duration
 	totalTrafficTarget int
+	requestData        []byte
+	hist               *hdrhistogram.Histogram
+	latencyHistory     ring.IntRing
+	received           chan *MeasuredResponse
 	cleanup            chan bool
 	exit               chan bool
 	interrupted        chan os.Signal
@@ -152,17 +155,17 @@ func NewHandlerParams(params *AppLoad) *HandlerParams {
 	requestData := LoadData(params.Data)
 
 	return &HandlerParams{
+		Good:               uint64(0),
+		Bad:                uint64(0),
+		Failed:             uint64(0),
+		Min:                int64(math.MaxInt64),
+		Max:                int64(0),
+		FailedHashCheck:    int64(0),
+		GlobalHist:         hdrhistogram.New(0, DayInMs, 3),
 		requestData:        requestData,
 		count:              uint64(0),
 		size:               uint64(0),
-		good:               uint64(0),
-		bad:                uint64(0),
-		failed:             uint64(0),
-		min:                int64(math.MaxInt64),
-		max:                int64(0),
-		failedHashCheck:    int64(0),
 		hist:               hdrhistogram.New(0, DayInMs, 3),
-		GlobalHist:         hdrhistogram.New(0, DayInMs, 3),
 		latencyHistory:     ring.New(5),
 		timeout:            time.NewTimer(params.Interval),
 		received:           make(chan *MeasuredResponse),
@@ -359,11 +362,11 @@ func (load *AppLoad) collectMetrics() {
 		case t := <-load.HandlerParams.timeout.C:
 			// When all requests are failures, ensure we don't accidentally
 			// print out a monstrously huge number.
-			if load.HandlerParams.min == math.MaxInt64 {
-				load.HandlerParams.min = 0
+			if load.HandlerParams.Min == math.MaxInt64 {
+				load.HandlerParams.Min = 0
 			}
 			// Periodically print stats about the request load.
-			percentAchieved := int(math.Min((((float64(load.HandlerParams.good) + float64(load.HandlerParams.bad)) /
+			percentAchieved := int(math.Min((((float64(load.HandlerParams.Good) + float64(load.HandlerParams.Bad)) /
 				float64(load.HandlerParams.totalTrafficTarget)) * 100), 100))
 
 			lastP99 := int(load.HandlerParams.hist.ValueAtQuantile(99))
@@ -376,29 +379,29 @@ func (load *AppLoad) collectMetrics() {
 
 			fmt.Printf("%s %6d/%1d/%1d %d %3d%% %s %3d [%3d %3d %3d %4d ] %4d %6d %s\n",
 				t.Format(time.RFC3339),
-				load.HandlerParams.good,
-				load.HandlerParams.bad,
-				load.HandlerParams.failed,
+				load.HandlerParams.Good,
+				load.HandlerParams.Bad,
+				load.HandlerParams.Failed,
 				load.HandlerParams.totalTrafficTarget,
 				percentAchieved,
 				load.Interval,
-				load.HandlerParams.min,
+				load.HandlerParams.Min,
 				load.HandlerParams.hist.ValueAtQuantile(50),
 				load.HandlerParams.hist.ValueAtQuantile(95),
 				load.HandlerParams.hist.ValueAtQuantile(99),
 				load.HandlerParams.hist.ValueAtQuantile(999),
-				load.HandlerParams.max,
-				load.HandlerParams.failedHashCheck,
+				load.HandlerParams.Max,
+				load.HandlerParams.FailedHashCheck,
 				changeIndicator)
 
 			load.HandlerParams.count = 0
 			load.HandlerParams.size = 0
-			load.HandlerParams.good = 0
-			load.HandlerParams.bad = 0
-			load.HandlerParams.min = math.MaxInt64
-			load.HandlerParams.max = 0
-			load.HandlerParams.failed = 0
-			load.HandlerParams.failedHashCheck = 0
+			load.HandlerParams.Good = 0
+			load.HandlerParams.Bad = 0
+			load.HandlerParams.Min = math.MaxInt64
+			load.HandlerParams.Max = 0
+			load.HandlerParams.Failed = 0
+			load.HandlerParams.FailedHashCheck = 0
 			load.HandlerParams.hist.Reset()
 			load.HandlerParams.timeout = time.NewTimer(load.Interval)
 
@@ -410,28 +413,28 @@ func (load *AppLoad) collectMetrics() {
 			metricsBackend.CounterInc(metrics.Requests)
 			if managedResp.err != nil {
 				fmt.Fprintln(os.Stderr, managedResp.err)
-				load.HandlerParams.failed++
+				load.HandlerParams.Failed++
 			} else {
 				load.HandlerParams.size += managedResp.sz
 				if managedResp.failedHashCheck {
-					load.HandlerParams.failedHashCheck++
+					load.HandlerParams.FailedHashCheck++
 				}
 				if managedResp.code >= 200 && managedResp.code < 500 {
-					load.HandlerParams.good++
+					load.HandlerParams.Good++
 					metricsBackend.CounterInc(metrics.Successes)
 					metricsBackend.HistogramObserve(metrics.LatencyHistogram, float64(managedResp.latency))
 				} else {
-					load.HandlerParams.bad++
+					load.HandlerParams.Bad++
 				}
 
-				if managedResp.latency < load.HandlerParams.min {
-					load.HandlerParams.min = managedResp.latency
+				if managedResp.latency < load.HandlerParams.Min {
+					load.HandlerParams.Min = managedResp.latency
 				}
 
-				if managedResp.latency > load.HandlerParams.max {
-					load.HandlerParams.max = managedResp.latency
+				if managedResp.latency > load.HandlerParams.Max {
+					load.HandlerParams.Max = managedResp.latency
 				}
-				metricsBackend.HistogramObserve(metrics.ThroughputHistogram, float64(load.HandlerParams.good))
+				metricsBackend.HistogramObserve(metrics.ThroughputHistogram, float64(load.HandlerParams.Good))
 				load.HandlerParams.hist.RecordValue(managedResp.latency)
 				load.HandlerParams.GlobalHist.RecordValue(managedResp.latency)
 			}
