@@ -43,9 +43,10 @@ type BenchmarkRecord struct {
 }
 
 type BenchmarkRequest struct {
-	RunId    string  `json:"runId"`
-	LoadTime string  `json:"loadTime"`
-	AppLoad  AppLoad `json:"appLoad"`
+	RunId            string  `json:"runId"`
+	LoadTime         string  `json:"loadTime"`
+	AppLoad          AppLoad `json:"appLoad"`
+	RunsPerIntensity int     `json:"runsPerIntensity"`
 }
 
 // HandlerParams : Parameters for handle http response and timeout event

@@ -67,6 +67,14 @@ func newRestfulService(server *Server) {
 	restful.Add(service)
 }
 
+func max(a int, b int) int {
+	if a > b {
+		return a
+	}
+
+	return b
+}
+
 // RunTest : Run test
 func (server *Server) RunBenchmark(request *restful.Request, response *restful.Response) {
 	loadRequest := load.BenchmarkRequest{}
@@ -100,7 +108,7 @@ func (server *Server) RunBenchmark(request *restful.Request, response *restful.R
 	}
 
 	go func() {
-		for i := 0; i < 3; i++ {
+		for i := 0; i < max(1, loadRequest.RunsPerIntensity); i++ {
 			go func() {
 				loadRequest.AppLoad.Run()
 			}()
@@ -108,7 +116,7 @@ func (server *Server) RunBenchmark(request *restful.Request, response *restful.R
 			<-time.After(loadDuration)
 			loadRequest.AppLoad.Stop()
 			newRecord := &load.BenchmarkRecord{
-				Failures:      loadRequest.AppLoad.HandlerParams.Failed,
+				Failures:      loadRequest.AppLoad.HandlerParams.Failed + loadRequest.AppLoad.HandlerParams.Bad,
 				PercentileMin: loadRequest.AppLoad.HandlerParams.GlobalHist.Min(),
 				Percentile50:  loadRequest.AppLoad.HandlerParams.GlobalHist.ValueAtQuantile(50),
 				Percentile95:  loadRequest.AppLoad.HandlerParams.GlobalHist.ValueAtQuantile(95),

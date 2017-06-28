@@ -86,8 +86,8 @@ func (load *LatencyCalibrationRun) Run() error {
 			<-time.After(loadDuration)
 			appLoad.Stop()
 
-			if appLoad.HandlerParams.Failed > 0 {
-				failedCount = appLoad.HandlerParams.Failed
+			if appLoad.HandlerParams.Failed+appLoad.HandlerParams.Bad > 0 {
+				failedCount = appLoad.HandlerParams.Failed + appLoad.HandlerParams.Bad
 			}
 
 			latency := appLoad.HandlerParams.GlobalHist.ValueAtQuantile(float64(load.Config.SLO.Percentile))
