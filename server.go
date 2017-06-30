@@ -93,8 +93,8 @@ func (server *Server) RunBenchmark(request *restful.Request, response *restful.R
 	server.mutex.Lock()
 	defer server.mutex.Unlock()
 
-	if _, ok := server.Benchmarks[id]; !ok {
-		response.WriteError(http.StatusBadRequest, fmt.Errorf("Task exist"))
+	if _, ok := server.Benchmarks[id]; ok {
+		response.WriteError(http.StatusBadRequest, fmt.Errorf("Task %s already exist", id))
 		return
 	}
 
@@ -103,7 +103,7 @@ func (server *Server) RunBenchmark(request *restful.Request, response *restful.R
 
 	loadDuration, err := time.ParseDuration(loadRequest.LoadTime)
 	if err != nil {
-		response.WriteError(http.StatusBadRequest, fmt.Errorf("Unable to parse load time: "+err.Error()))
+		response.WriteError(http.StatusBadRequest, fmt.Errorf("Unable to parse load time: %s", err.Error()))
 		return
 	}
 
