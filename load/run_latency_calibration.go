@@ -41,11 +41,11 @@ type LatencyCalibration struct {
 	SLO       SLO     `json:"slo"`
 	Load      AppLoad `json:"appLoad"`
 	Calibrate struct {
-		InitialConcurrency int    `json:"initialConcurrency"`
-		Step               int    `json:"step"`
-		RunsPerIntensity   int    `json:"runsPerIntensity"`
-		LoadTime           string `json:"loadTime"`
+		InitialConcurrency int `json:"initialConcurrency"`
+		Step               int `json:"step"`
+		RunsPerIntensity   int `json:"runsPerIntensity"`
 	} `json:"calibrate"`
+	LoadTime string `json:"loadTime"`
 }
 
 func (load *LatencyCalibrationRun) getSummaryLatency() int64 {
@@ -65,10 +65,10 @@ func (load *LatencyCalibrationRun) Run() error {
 	appLoad.NoLatencySummary = true
 	// Setting a long default interval as we don't need periodic metrics
 	appLoad.Interval = time.Hour * 24
-	loadDuration, err := time.ParseDuration(load.Config.Calibrate.LoadTime)
+	loadDuration, err := time.ParseDuration(load.Config.LoadTime)
 	if err != nil {
-		glog.Errorf("Unable to parse load time '%s': ", load.Config.Calibrate.LoadTime, err.Error())
-		return fmt.Errorf("Unable to parse load time %s: %s", load.Config.Calibrate.LoadTime, err.Error())
+		glog.Errorf("Unable to parse load time '%s': ", load.Config.LoadTime, err.Error())
+		return fmt.Errorf("Unable to parse load time '%s': %s", load.Config.LoadTime, err.Error())
 	}
 
 	load.Results = make([]*CalibrationRecord, 0)
