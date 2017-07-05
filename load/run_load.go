@@ -3,6 +3,7 @@ package load
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"hash"
@@ -86,11 +87,19 @@ type AppLoad struct {
 	Hosts               []string      `json:"hosts"`
 	Data                string        `json:"data"`
 	LoadTime            string        `json:'loadTime' binding:"required"`
-	Headers             HeaderSet
+	Scenario            []Task        `json:"scenario"`
+	Headers             HeaderSet     `json:"headers"`
 	HistogramWindowSize time.Duration
 	reqID               uint64
 	HandlerParams       *HandlerParams
 	MetricOpts          *metrics.MetricsOpts
+}
+
+type Task struct {
+	UrlTemplate string `json:"url_template"`
+	Method      string `json:"method"`
+	Data        string `json:"data"`
+	DrainResp   string `json:"drain_resp"`
 }
 
 func (load *AppLoad) onExit() {
@@ -114,7 +123,16 @@ func (load *AppLoad) Run() error {
 		load.Hosts = []string{""}
 	}
 
-	dstUrl, err := url.Parse(load.DstURL)
+	var tasks []Task
+
+	if len(load.Scenario) == 0 {
+		tasks = make([]Task, 1)
+		tasks = append(tasks, Task{UrlTemplate: load.DstURL, Method: load.Method, Data: load.Data})
+	} else {
+		tasks = load.Scenario
+	}
+
+	dstUrl, err := url.Parse(tasks[0].UrlTemplate)
 	if err != nil {
 		return errors.New("Unable to parse url: " + err.Error())
 	}
@@ -135,7 +153,7 @@ func (load *AppLoad) Run() error {
 	}
 
 	// Run Request
-	load.runRequest(dstUrl, client)
+	load.runRequest(&tasks, client)
 
 	// Collect Metrics
 	load.collectMetrics()
@@ -225,7 +243,7 @@ func sendRequest(
 	hasher hash.Hash64,
 	received chan *MeasuredResponse,
 	bodyBuffer []byte,
-) {
+) []byte {
 	req, err := http.NewRequest(method, url.String(), bytes.NewBuffer(requestData))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
@@ -247,7 +265,6 @@ func sendRequest(
 			elapsed = time.Since(start)
 		},
 	}
-
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
 	response, err := client.Do(req)
 
@@ -255,13 +272,15 @@ func sendRequest(
 		received <- &MeasuredResponse{err: err}
 	} else {
 		defer response.Body.Close()
-		if !checkHash {
-			if sz, err := io.CopyBuffer(ioutil.Discard, response.Body, bodyBuffer); err == nil {
 
+		if !checkHash {
+			buf := bytes.NewBuffer(nil)
+			if sz, err := io.CopyBuffer(buf, response.Body, bodyBuffer); err == nil {
 				received <- &MeasuredResponse{
 					sz:      uint64(sz),
 					code:    response.StatusCode,
 					latency: elapsed.Nanoseconds() / 1000000}
+				return buf.Bytes()
 			} else {
 				received <- &MeasuredResponse{err: err}
 			}
@@ -280,13 +299,15 @@ func sendRequest(
 					code:            response.StatusCode,
 					latency:         elapsed.Nanoseconds() / 1000000,
 					failedHashCheck: failedHashCheck}
+				return bytes
 			}
 		}
 	}
+	return nil
 }
 
 // RunRequest : Parallel sending request with RunLoadParams.Concurrency threads
-func (load *AppLoad) runRequest(dstUrl *url.URL, client *http.Client) {
+func (load *AppLoad) runRequest(tasks *[]Task, client *http.Client) {
 	for i := 0; i < load.Concurrency; i++ {
 		ticker := time.NewTicker(load.HandlerParams.timeToWait)
 		go func() {
@@ -303,8 +324,31 @@ func (load *AppLoad) runRequest(dstUrl *url.URL, client *http.Client) {
 				}
 				load.HandlerParams.shouldFinishLock.RLock()
 				if !load.HandlerParams.shouldFinish {
-					load.HandlerParams.shouldFinishLock.RUnlock()
-					sendRequest(client, load.Method, dstUrl, load.Hosts[rand.Intn(len(load.Hosts))], load.Headers, load.HandlerParams.requestData, atomic.AddUint64(&load.reqID, 1), load.HashValue, checkHash, hasher, load.HandlerParams.received, bodyBuffer)
+					load.HandlerParams.shouldFinishLock.RUnlock() // compile path parameter
+
+					drainResp := make(map[string]string)
+					for _, task := range *tasks {
+						var dstUrl *url.URL
+						var err error
+						parsedUrl := task.UrlTemplate
+						for k, v := range drainResp {
+							parsedUrl = strings.Replace(task.UrlTemplate, ":"+k, v, -1)
+						}
+
+						dstUrl, err = url.Parse(parsedUrl)
+
+						if err != nil {
+							log.Panicf("URL parsing error")
+						}
+						resp := sendRequest(client, task.Method, dstUrl, load.Hosts[rand.Intn(len(load.Hosts))], load.Headers, LoadData(task.Data), atomic.AddUint64(&load.reqID, 1), load.HashValue, checkHash, hasher, load.HandlerParams.received, bodyBuffer)
+						if task.DrainResp != "" {
+							if len(resp) > 0 {
+								data := map[string]interface{}{}
+								json.Unmarshal(resp, &data)
+								drainResp[task.DrainResp] = data[task.DrainResp].(string)
+							}
+						}
+					}
 				} else {
 					load.HandlerParams.shouldFinishLock.RUnlock()
 					load.HandlerParams.sendTraffic.Done()
