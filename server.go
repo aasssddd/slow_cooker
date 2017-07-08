@@ -107,6 +107,13 @@ func (server *Server) RunBenchmark(request *restful.Request, response *restful.R
 		return
 	}
 
+	// Override defaults for calibration
+	loadRequest.AppLoad.NoLatencySummary = true
+	// Setting a long default interval as we don't need periodic metrics
+	loadRequest.AppLoad.Interval = time.Hour * 24
+
+	glog.V(1).Infof("Received benchmark request: %+v", loadRequest)
+
 	go func() {
 		for i := 0; i < max(1, loadRequest.RunsPerIntensity); i++ {
 			go func() {
