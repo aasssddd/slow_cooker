@@ -3,6 +3,7 @@ package load
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"hash"
@@ -65,7 +66,7 @@ type HandlerParams struct {
 	timeout            *time.Timer
 	timeToWait         time.Duration
 	totalTrafficTarget int
-	requestData        []byte
+	requestData        [][]byte
 	hist               *hdrhistogram.Histogram
 	latencyHistory     ring.IntRing
 	received           chan *MeasuredResponse
@@ -135,7 +136,7 @@ func (load *AppLoad) Run() error {
 
 	if len(load.Scenario) == 0 {
 		tasks = make([]Task, 1)
-		tasks = append(tasks, Task{UrlTemplate: load.DstURL, Method: load.Method, Data: load.Data})
+		tasks[0] = Task{UrlTemplate: load.DstURL, Method: load.Method, Data: load.Data}
 	} else {
 		tasks = load.Scenario
 	}
@@ -326,6 +327,21 @@ func (load *AppLoad) runRequest(tasks *[]Task, client *http.Client) {
 			// For each goroutine we want to reuse a buffer for performance reasons.
 			bodyBuffer := make([]byte, 50000)
 			load.HandlerParams.sendTraffic.Add(1)
+
+			// TODO: rolling read request data
+			dataIndex := make(map[int]*struct {
+				Index int
+				Data  [][]byte
+			})
+			for i, task := range *tasks {
+				dataIndex[i] = &struct {
+					Index int
+					Data  [][]byte
+				}{
+					0,
+					LoadData(task.Data),
+				}
+			}
 			for _ = range ticker.C {
 				var checkHash bool
 				hasher := fnv.New64a()
@@ -339,7 +355,8 @@ func (load *AppLoad) runRequest(tasks *[]Task, client *http.Client) {
 					load.HandlerParams.shouldFinishLock.RUnlock() // compile path parameter
 
 					drainResp := make(map[string]string)
-					for _, task := range *tasks {
+					for i, task := range *tasks {
+
 						var dstUrl *url.URL
 						var err error
 						parsedUrl := task.UrlTemplate
@@ -352,7 +369,11 @@ func (load *AppLoad) runRequest(tasks *[]Task, client *http.Client) {
 						if err != nil {
 							log.Panicf("URL parsing error")
 						}
-						resp := sendRequest(client, task.Method, dstUrl, load.Hosts[rand.Intn(len(load.Hosts))], load.Headers, LoadData(task.Data), atomic.AddUint64(&load.reqID, 1), load.HashValue, checkHash, hasher, load.HandlerParams.received, bodyBuffer)
+						resp := sendRequest(client, task.Method, dstUrl, load.Hosts[rand.Intn(len(load.Hosts))], load.Headers, dataIndex[i].Data[dataIndex[i].Index], atomic.AddUint64(&load.reqID, 1), load.HashValue, checkHash, hasher, load.HandlerParams.received, bodyBuffer)
+						dataIndex[i].Index = dataIndex[i].Index + 1
+
+						fmt.Printf("index: %v, data: %v", dataIndex[i].Index, dataIndex[i].Data[dataIndex[i].Index])
+
 						if task.DrainResp != "" {
 							if len(resp) > 0 {
 								data := map[string]interface{}{}
