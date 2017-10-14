@@ -1,8 +1,8 @@
 package load
 
 import (
+	"bufio"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 )
@@ -23,9 +23,10 @@ type MeasuredResponse struct {
 	err             error
 }
 
-func LoadData(data string) []byte {
+func LoadData(data string) [][]byte {
+	// TODO: treat each line as one data record
 	var file *os.File
-	var requestData []byte
+	var requestData [][]byte
 	var err error
 	if strings.HasPrefix(data, "@") {
 		path := data[1:]
@@ -39,14 +40,17 @@ func LoadData(data string) []byte {
 			}
 			defer file.Close()
 		}
-
-		requestData, err = ioutil.ReadAll(file)
+		reader := bufio.NewReader(file)
+		scanner := bufio.NewScanner(reader)
+		for scanner.Scan() {
+			requestData = append(requestData, []byte(scanner.Text()))
+		}
 		if err != nil {
 			fmt.Fprintf(os.Stderr, err.Error())
 			os.Exit(1)
 		}
 	} else {
-		requestData = []byte(data)
+		requestData = append(requestData, []byte(data))
 	}
 
 	return requestData

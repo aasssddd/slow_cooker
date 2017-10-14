@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/buoyantio/slow_cooker",
-	"GoVersion": "go1.8",
+	"GoVersion": "go1.9",
 	"GodepVersion": "v79",
 	"Deps": [
 		{
