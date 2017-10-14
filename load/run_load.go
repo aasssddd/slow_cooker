@@ -328,7 +328,6 @@ func (load *AppLoad) runRequest(tasks *[]Task, client *http.Client) {
 			bodyBuffer := make([]byte, 50000)
 			load.HandlerParams.sendTraffic.Add(1)
 
-			// TODO: rolling read request data
 			var dataIndex []*struct {
 				Index int
 				Data  [][]byte
