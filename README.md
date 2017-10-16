@@ -32,7 +32,7 @@ or:
 | `-qps`                | 1         | QPS to send to backends per request thread. |
 | `-concurrency`        | 1         | Number of goroutines to run, each at the specified QPS level. Measure total QPS as `qps * concurrency`. |
 | `-compress`           | `<unset>` | If set, ask for compressed responses. |
-| `-data`               | `<none>`  | Include the specified body data in requests. If the data starts with a '@' the remaining value will be treated as a file path to read the body data from, or if the data value is '@-', the body data will be read from stdin. |
+| `-data`               | `<none>`  | Include the specified body data in requests. If the data starts with a '@' the remaining value will be treated as a file path to read the body data from, or if the data value is '@-', the body data will be read from stdin, if data value is starts with @http, it will GET data from remote server |
 | `-header`             | `<none>`  | Adds additional headers to each request. Can be specified multiple times. Format is `key: value`. |
 | `-host`               | `<none>`  | Overrides the default host header value that's set on each request. |
 | `-interval`           | 10s       | How often to report stats to stdout. |

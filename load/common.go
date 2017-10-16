@@ -3,6 +3,8 @@ package load
 import (
 	"bufio"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"strings"
 )
@@ -25,13 +27,22 @@ type MeasuredResponse struct {
 
 func LoadData(data string) [][]byte {
 	// TODO: treat each line as one data record
-	var file *os.File
+	var file io.ReadCloser
 	var requestData [][]byte
 	var err error
 	if strings.HasPrefix(data, "@") {
 		path := data[1:]
 		if path == "-" {
 			file = os.Stdin
+		} else if strings.HasPrefix(path, "http") {
+			// Download file from remote host
+			var resp *http.Response
+			if resp, err = http.Get(path); err == nil {
+				file = resp.Body
+			} else {
+				fmt.Fprintf(os.Stderr, err.Error())
+				os.Exit(1)
+			}
 		} else {
 			file, err = os.Open(path)
 			if err != nil {

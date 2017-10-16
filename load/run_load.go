@@ -376,6 +376,7 @@ func (load *AppLoad) runRequest(tasks *[]Task, client *http.Client) {
 						if err != nil {
 							log.Panicf("URL parsing error")
 						}
+						// fmt.Printf("Data: %v\n", string(dataIndex[i].Data[dataIndex[i].Index]))
 						resp := sendRequest(client, task.Method, dstUrl, load.Hosts[rand.Intn(len(load.Hosts))], load.Headers, dataIndex[i].Data[dataIndex[i].Index], atomic.AddUint64(&load.reqID, 1), load.HashValue, checkHash, hasher, load.HandlerParams.received, bodyBuffer)
 						dataIndex[i].Index = dataIndex[i].Index + 1
 
