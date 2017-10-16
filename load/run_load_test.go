@@ -37,7 +37,13 @@ func TestRunLoad(t *testing.T) {
 		err = run(testData)
 		assert.Empty(t, err, "test load file error: %v", err)
 	})
-	// data from stdin
+	// data from remote url
+	t.Run("Test data from remote file", func(t *testing.T) {
+		t.Parallel()
+		testData = "@https://s3.amazonaws.com/blahblah-files/test.txt"
+		err = run(testData)
+		assert.Empty(t, err, "test data from remote file：%v", err)
+	})
 
 	// tear down local test server
 	defer svr.Shutdown(nil)
