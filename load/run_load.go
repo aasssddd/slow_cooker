@@ -78,6 +78,15 @@ type HandlerParams struct {
 	sendTraffic        sync.WaitGroup
 }
 
+type RunningStep struct {
+	Qps      int    `json:"qps"`
+	Duration string `json:"string"`
+}
+
+type RunningPlan struct {
+	RunningSteps []*RunningStep `json:"runningSteps"`
+}
+
 // AppLoad
 type AppLoad struct {
 	CommandMode         bool
@@ -95,7 +104,7 @@ type AppLoad struct {
 	DstURL              string        `json:"url"`
 	Hosts               []string      `json:"hosts"`
 	Data                string        `json:"data"`
-	LoadTime            string        `json:'loadTime' binding:"required"`
+	LoadTime            string        `json:"loadTime" binding:"required"`
 	Scenario            []Task        `json:"scenario"`
 	Headers             HeaderSet     `json:"headers"`
 	HistogramWindowSize time.Duration
