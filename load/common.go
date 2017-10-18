@@ -26,7 +26,6 @@ type MeasuredResponse struct {
 }
 
 func LoadData(data string) [][]byte {
-	// TODO: treat each line as one data record
 	var file io.ReadCloser
 	var requestData [][]byte
 	var err error

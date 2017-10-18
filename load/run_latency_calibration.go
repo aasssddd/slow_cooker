@@ -38,9 +38,8 @@ func NewLatencyCalibrationRun(id string, calibrate *LatencyCalibration) *Latency
 
 // RunCalibrationParams : latency struct
 type LatencyCalibration struct {
-	SLO       SLO         `json:"slo"`
-	Load      AppLoad     `json:"appLoad"`
-	Plan      RunningPlan `json:"runningPlan"`
+	SLO       SLO     `json:"slo"`
+	Load      AppLoad `json:"appLoad"`
 	Calibrate struct {
 		InitialConcurrency int `json:"initialConcurrency"`
 		Step               int `json:"step"`
@@ -66,55 +65,39 @@ func (load *LatencyCalibrationRun) Run() error {
 	appLoad.NoLatencySummary = true
 	// Setting a long default interval as we don't need periodic metrics
 	appLoad.Interval = time.Hour * 24
-
-	var loadDuration time.Duration
-	var err error
-
-	iteration := len(load.Config.Plan.RunningSteps)
-	if iteration == 0 {
-		iteration = 1
+	loadDuration, err := time.ParseDuration(load.Config.LoadTime)
+	if err != nil {
+		glog.Errorf("Unable to parse load time '%s': ", load.Config.LoadTime, err.Error())
+		return fmt.Errorf("Unable to parse load time '%s': %s", load.Config.LoadTime, err.Error())
 	}
 
 	load.Results = make([]*CalibrationRecord, 0)
 	concurrency := load.Config.Calibrate.InitialConcurrency
 	runs := 1
-	var failedCount uint64
 	for runs < MAX_RUNS {
-		for index := 0; index < iteration; index++ {
-			if iteration == 0 {
-				loadDuration, err = time.ParseDuration(load.Config.LoadTime)
-			} else {
-				loadDuration, err = time.ParseDuration(load.Config.Plan.RunningSteps[index].Duration)
-				appLoad.Qps = load.Config.Plan.RunningSteps[index].Qps
+		appLoad.Concurrency = concurrency
+		var failedCount uint64
+		for i := 0; i < load.Config.Calibrate.RunsPerIntensity || failedCount > 0; i++ {
+			failedCount = 0
+			go func() {
+				glog.Infof("Starting calibration run #%d with concurrency %d", i+1, concurrency)
+				appLoad.Run()
+			}()
+			<-time.After(loadDuration)
+			appLoad.Stop()
+
+			if appLoad.HandlerParams.Failed+appLoad.HandlerParams.Bad > 0 {
+				failedCount = appLoad.HandlerParams.Failed + appLoad.HandlerParams.Bad
 			}
 
-			if err != nil {
-				glog.Errorf("Unable to parse load time '%s': ", load.Config.LoadTime, err.Error())
-				return fmt.Errorf("Unable to parse load time '%s': %s", load.Config.LoadTime, err.Error())
-			}
-
-			for i := 0; i < load.Config.Calibrate.RunsPerIntensity || failedCount > 0; i++ {
-				failedCount = 0
-				go func() {
-					glog.Infof("Starting calibration run #%d with concurrency %d", i+1, concurrency)
-					appLoad.Run()
-				}()
-				<-time.After(loadDuration)
-				appLoad.Stop()
-
-				if appLoad.HandlerParams.Failed+appLoad.HandlerParams.Bad > 0 {
-					failedCount = appLoad.HandlerParams.Failed + appLoad.HandlerParams.Bad
-				}
-
-				latency := appLoad.HandlerParams.GlobalHist.ValueAtQuantile(float64(load.Config.SLO.Percentile))
-				glog.Infof("Run #%d with concurrency %d finished with percentile %d, latency %d. failures %d",
-					i+1, concurrency, load.Config.SLO.Percentile, latency, failedCount)
-				load.Results = append(load.Results, &CalibrationRecord{
-					LatencyMs:   latency,
-					Concurrency: concurrency,
-					Failures:    failedCount,
-				})
-			}
+			latency := appLoad.HandlerParams.GlobalHist.ValueAtQuantile(float64(load.Config.SLO.Percentile))
+			glog.Infof("Run #%d with concurrency %d finished with percentile %d, latency %d. failures %d",
+				i+1, concurrency, load.Config.SLO.Percentile, latency, failedCount)
+			load.Results = append(load.Results, &CalibrationRecord{
+				LatencyMs:   latency,
+				Concurrency: concurrency,
+				Failures:    failedCount,
+			})
 		}
 
 		if failedCount > 0 {
@@ -134,7 +117,7 @@ func (load *LatencyCalibrationRun) Run() error {
 			LatencyMs:   latency,
 			Failures:    0,
 		}
-		runs++
+		runs += 1
 		concurrency += load.Config.Calibrate.Step
 	}
 
