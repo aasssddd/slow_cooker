@@ -76,7 +76,6 @@ type HandlerParams struct {
 	shouldFinishLock   sync.RWMutex
 	sendTraffic        sync.WaitGroup
 	startStep          chan *RunningStep
-	stepLock           sync.RWMutex
 	stopStep           bool
 	stopStepSignal     chan bool
 }
@@ -183,9 +182,19 @@ func (load *AppLoad) Run() error {
 	load.StartLoadRunner()
 
 	// push jobs to runner
-	for _, step := range steps {
-		load.HandlerParams.startStep <- step
-	}
+	go func() {
+		for _, step := range steps {
+			load.HandlerParams.startStep <- step
+			loadTime, err := time.ParseDuration(step.Duration)
+			if err != nil {
+				log.Panicf("Unable to parse duration, %v", step.Duration)
+				load.HandlerParams.stopStep = true
+			} else {
+				<-time.After(loadTime)
+				load.HandlerParams.stopStep = true
+			}
+		}
+	}()
 
 	// Collect Metrics (handler)
 	load.collectMetrics()
@@ -213,7 +222,7 @@ func (load *AppLoad) StartLoadRunner() {
 			for {
 				select {
 				case step := <-load.HandlerParams.startStep:
-					load.HandlerParams.stepLock.Lock()
+					fmt.Println("new round")
 					load.HandlerParams.stopStep = false
 					fmt.Printf("start step with Qps: %v Concurrency: %v duration: %v\n", step.Qps, step.Concurrency, step.Duration)
 					load.Qps = step.Qps
@@ -221,30 +230,9 @@ func (load *AppLoad) StartLoadRunner() {
 					load.HandlerParams.timeToWait = CalcTimeToWait(&load.Qps)
 
 					client := newClient(load.Compress, doTLS, load.Noreuse, load.Concurrency)
-					loadTime, err := time.ParseDuration(step.Duration)
-					if err != nil {
-						log.Panicf("Unable to parse duration, %v", step.Duration)
-						load.HandlerParams.stopStepSignal <- true
-					} else {
-						// Run Request
-						load.runRequest(&tasks, client)
-					}
 
-					// event listener
-					go func() {
-						for {
-							select {
-							case <-time.After(loadTime):
-								load.HandlerParams.stopStepSignal <- true
-
-							case <-load.HandlerParams.stopStepSignal:
-								load.HandlerParams.stopStep = true
-								load.HandlerParams.stepLock.Unlock()
-								return
-							}
-						}
-					}()
-
+					// Run Request
+					load.runRequest(&tasks, client)
 				}
 
 			}
