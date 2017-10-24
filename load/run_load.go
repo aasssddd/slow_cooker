@@ -167,6 +167,8 @@ func (load *AppLoad) Run() error {
 		signal.Notify(load.HandlerParams.interrupted, syscall.SIGINT)
 	}
 	var steps []*RunningStep
+
+	// get QPS, Concurrency, LoadTime from Plan
 	if len(load.Plan.RunningSteps) > 0 {
 		steps = load.Plan.RunningSteps
 	} else {
@@ -176,10 +178,6 @@ func (load *AppLoad) Run() error {
 			Duration:    load.LoadTime,
 		})
 	}
-	// get QPS, Concurrency, LoadTime from Plan
-
-	// start runner process
-	load.StartLoadRunner()
 
 	// push jobs to runner
 	go func() {
@@ -189,12 +187,13 @@ func (load *AppLoad) Run() error {
 			if err != nil {
 				log.Panicf("Unable to parse duration, %v", step.Duration)
 				load.HandlerParams.stopStep = true
-			} else {
-				<-time.After(loadTime)
-				load.HandlerParams.stopStep = true
 			}
+			<-time.After(loadTime)
+			load.HandlerParams.stopStep = true
 		}
 	}()
+
+	load.StartLoadRunner()
 
 	// Collect Metrics (handler)
 	load.collectMetrics()
@@ -216,26 +215,22 @@ func (load *AppLoad) StartLoadRunner() {
 		dstURL, err := url.Parse(tasks[0].UrlTemplate)
 		if err != nil {
 			log.Panicf("Unable to parse url: %v", err.Error())
-		} else {
-			doTLS := dstURL.Scheme == "https"
+		}
+		doTLS := dstURL.Scheme == "https"
 
-			for {
-				select {
-				case step := <-load.HandlerParams.startStep:
-					fmt.Println("new round")
-					load.HandlerParams.stopStep = false
-					fmt.Printf("start step with Qps: %v Concurrency: %v duration: %v\n", step.Qps, step.Concurrency, step.Duration)
-					load.Qps = step.Qps
-					load.Concurrency = step.Concurrency
-					load.HandlerParams.timeToWait = CalcTimeToWait(&load.Qps)
-
-					client := newClient(load.Compress, doTLS, load.Noreuse, load.Concurrency)
-
-					// Run Request
-					load.runRequest(&tasks, client)
-				}
-
+		for {
+			select {
+			case step := <-load.HandlerParams.startStep:
+				load.HandlerParams.stopStep = false
+				fmt.Printf("start step with Qps: %v Concurrency: %v duration: %v\n", step.Qps, step.Concurrency, step.Duration)
+				load.Qps = step.Qps
+				load.Concurrency = step.Concurrency
+				load.HandlerParams.timeToWait = CalcTimeToWait(&load.Qps)
+				client := newClient(load.Compress, doTLS, load.Noreuse, load.Concurrency)
+				// Run Request
+				load.runRequest(&tasks, client)
 			}
+
 		}
 	}()
 }
